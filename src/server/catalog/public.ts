@@ -218,6 +218,68 @@ export async function getCatalogFacets(
   });
 }
 
+/**
+ * Collections a product belongs to, filtered to published ones — an
+ * archived or draft collection must never surface on a public page.
+ */
+export async function publishedCollectionsOf(
+  product: Product,
+): Promise<Collection[]> {
+  if (product.collectionIds.length === 0) return [];
+  const { collections } = getRepositories();
+  const found = await Promise.all(
+    product.collectionIds.map((id) => collections.getById(id)),
+  );
+  return found.filter(
+    (collection): collection is Collection =>
+      collection !== null && collection.status === "published",
+  );
+}
+
+/**
+ * Related products, by real catalogue relationships only — never
+ * popularity or "best selling" data we do not have.
+ *
+ * Relevance order: same primary category → shared collection → same
+ * fabric or occasion. Each step runs a small bounded query (never a full
+ * catalog scan) and stops as soon as `limit` is filled. Returns fewer
+ * products — or none — rather than padding with unrelated items.
+ */
+export async function getRelatedProducts(
+  product: Product,
+  limit = 4,
+): Promise<Product[]> {
+  const seen = new Set<string>([product.id]);
+  const picks: Product[] = [];
+
+  const take = async (filters: PublicProductFilters) => {
+    if (picks.length >= limit) return;
+    // +1 covers the current product being inside its own result set.
+    const { products } = await listPublishedProducts(
+      { ...filters, sort: "created_desc" },
+      1,
+      limit + 1,
+    );
+    for (const candidate of products) {
+      if (picks.length >= limit) break;
+      if (seen.has(candidate.id)) continue;
+      seen.add(candidate.id);
+      picks.push(candidate);
+    }
+  };
+
+  if (product.categoryId) await take({ categoryId: product.categoryId });
+  for (const collectionId of product.collectionIds) {
+    await take({ collectionId });
+  }
+  if (product.attributes.fabric) await take({ fabric: product.attributes.fabric });
+  if (product.attributes.occasion) {
+    await take({ occasion: product.attributes.occasion });
+  }
+
+  return picks;
+}
+
 /** Names of published categories, for card labels. */
 export async function publishedCategoryNames(): Promise<Map<string, string>> {
   const categories = await listPublishedCategories();
