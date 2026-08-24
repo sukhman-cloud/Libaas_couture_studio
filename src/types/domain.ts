@@ -324,18 +324,54 @@ export interface Quote extends Timestamps {
 
 // ── Cart & orders ───────────────────────────────────────────────────
 
+/**
+ * A line in the cart.
+ *
+ * `unitPrice` is a SNAPSHOT captured when the line was created — the
+ * product's price may change afterwards, and the customer must never be
+ * silently charged a different amount. Cart reads compare the snapshot to
+ * the live price and surface the difference.
+ *
+ * `configurationKey` distinguishes lines for the same product that differ
+ * by future options (unstitched vs stitched vs custom). It is "" today;
+ * Phase 7 derives it from the stitching/customisation selection so the
+ * same product can sit in the cart more than once.
+ */
 export interface CartItem {
   id: ID;
   productId: ID;
-  variantId?: ID;
   quantity: number;
+  unitPrice: Money;
+  configurationKey: string;
+  /** Reserved for Phase 7 — stitching, measurements, customisation. */
+  stitching?: {
+    selected: boolean;
+    measurementProfileId?: ID;
+  };
   customizationRequestId?: ID;
+  notes?: string;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
 }
 
+/** One active cart per customer. */
 export interface Cart extends Timestamps {
   id: ID;
-  customerId?: ID; // guest carts have no customer
+  customerId: ID;
   items: CartItem[];
+}
+
+export interface WishlistItem {
+  id: ID;
+  productId: ID;
+  createdAt: ISODateTime;
+}
+
+/** One wishlist per customer; a product appears at most once. */
+export interface Wishlist extends Timestamps {
+  id: ID;
+  customerId: ID;
+  items: WishlistItem[];
 }
 
 /**

@@ -48,9 +48,20 @@ function Brand() {
   );
 }
 
-export function SiteHeader() {
+export function SiteHeader({
+  cartCount = 0,
+  wishlistCount = 0,
+}: {
+  /** Total quantity in the signed-in customer's bag. */
+  cartCount?: number;
+  /** Number of wishlisted products. */
+  wishlistCount?: number;
+} = {}) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  const countFor = (href: string) =>
+    href === "/cart" ? cartCount : href === "/wishlist" ? wishlistCount : 0;
 
   // Close the drawer on navigation.
   useEffect(() => {
@@ -109,24 +120,39 @@ export function SiteHeader() {
 
           {/* Desktop: personal shortcuts */}
           <ul className="hidden items-center gap-1 md:flex">
-            {customerActionNav.map((item) => (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  aria-label={item.title}
-                  aria-current={isActive(pathname, item) ? "page" : undefined}
-                  title={item.title}
-                  className={cn(
-                    "inline-flex size-11 items-center justify-center rounded-full transition-colors",
-                    isActive(pathname, item)
-                      ? "bg-navy-700 text-cream-50"
-                      : "text-navy-700 hover:bg-navy-50",
-                  )}
-                >
-                  <item.icon className="size-5" aria-hidden />
-                </Link>
-              </li>
-            ))}
+            {customerActionNav.map((item) => {
+              const count = countFor(item.href);
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    // The count is part of the accessible name, never
+                    // conveyed by the badge alone.
+                    aria-label={
+                      count > 0 ? `${item.title} (${count})` : item.title
+                    }
+                    aria-current={isActive(pathname, item) ? "page" : undefined}
+                    title={item.title}
+                    className={cn(
+                      "relative inline-flex size-11 items-center justify-center rounded-full transition-colors",
+                      isActive(pathname, item)
+                        ? "bg-navy-700 text-cream-50"
+                        : "text-navy-700 hover:bg-navy-50",
+                    )}
+                  >
+                    <item.icon className="size-5" aria-hidden />
+                    {count > 0 && (
+                      <span
+                        aria-hidden
+                        className="absolute -right-0.5 -top-0.5 min-w-5 rounded-full bg-gold-500 px-1 text-center text-[11px] font-medium leading-5 text-navy-900"
+                      >
+                        {count > 99 ? "99+" : count}
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
 
           {/* Mobile: menu drawer trigger */}

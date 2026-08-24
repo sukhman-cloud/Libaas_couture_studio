@@ -12,6 +12,7 @@ import {
   ProductGridSkeleton,
 } from "@/components/catalog/product-grid";
 import { ShareButton } from "@/components/catalog/share-button";
+import { ProductActions } from "@/components/commerce/product-actions";
 import { Badge } from "@/components/ui/badge";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { buttonStyles } from "@/components/ui/button";
@@ -19,7 +20,9 @@ import { Container, Section } from "@/components/ui/layout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Caption, Heading, Text } from "@/components/ui/typography";
 import { siteConfig } from "@/config/site";
+import { getCustomerUser } from "@/lib/auth/customer-session";
 import { formatPrice } from "@/lib/utils";
+import { isPurchasable, isWishlisted } from "@/server/commerce/service";
 import {
   getPublishedProductBySlug,
   getRelatedProducts,
@@ -157,7 +160,11 @@ export default async function ProductPage({
   // Draft/archived products are indistinguishable from missing ones.
   if (!product) notFound();
 
-  const collections = await publishedCollectionsOf(product);
+  const customer = await getCustomerUser();
+  const [collections, wishlisted] = await Promise.all([
+    publishedCollectionsOf(product),
+    customer ? isWishlisted(customer.id, product.id) : Promise.resolve(false),
+  ]);
 
   const category = product.categoryId
     ? await getRepositories().categories.getById(product.categoryId)
@@ -355,9 +362,19 @@ export default async function ProductPage({
               </p>
             )}
 
-            {/* Enquiry + share. Cart and wishlist actions land here in a
-                later phase — nothing inactive is shown as if it worked. */}
-            <div className="mt-8 rounded-2xl border border-cream-200 p-5">
+            {/* Bag + wishlist. Signed-out visitors are routed to sign in
+                rather than shown a control that quietly does nothing. */}
+            <div className="mt-8">
+              <ProductActions
+                slug={product.slug}
+                purchasable={isPurchasable(product)}
+                signedIn={customer !== null}
+                initiallyWishlisted={wishlisted}
+                returnTo={`/products/${product.slug}`}
+              />
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-cream-200 p-5">
               <Text size="sm">
                 Online ordering is coming soon. To enquire about this piece or
                 start a custom order, visit the studio or message us.
@@ -367,7 +384,7 @@ export default async function ProductPage({
                   href={siteConfig.social.instagram}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={buttonStyles({ size: "sm" })}
+                  className={buttonStyles({ variant: "outline", size: "sm" })}
                 >
                   Message the studio
                 </Link>

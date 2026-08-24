@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Heart,
   LayoutDashboard,
   MapPin,
   Ruler,
@@ -13,6 +14,7 @@ import { cn } from "@/lib/utils";
 
 const items = [
   { title: "Overview", href: "/account", icon: LayoutDashboard, exact: true },
+  { title: "Wishlist", href: "/account/wishlist", icon: Heart },
   { title: "Profile", href: "/account/profile", icon: UserRound },
   { title: "Addresses", href: "/account/addresses", icon: MapPin },
   { title: "Measurements", href: "/account/measurements", icon: Ruler },

@@ -2,6 +2,7 @@ import "server-only";
 import type {
   Appointment,
   AuthCredential,
+  Cart,
   CatalogStatus,
   Category,
   Collection,
@@ -12,6 +13,7 @@ import type {
   PasswordResetToken,
   Product,
   User,
+  Wishlist,
 } from "@/types/domain";
 import {
   ADMIN_SEARCH_FIELDS,
@@ -32,7 +34,7 @@ import {
  */
 
 /** Bump when the persisted shape changes; add a step to `migrateStore`. */
-export const STORE_VERSION = 2;
+export const STORE_VERSION = 3;
 
 export interface DataStore {
   version: number;
@@ -47,6 +49,8 @@ export interface DataStore {
   customerProfiles: CustomerProfile[];
   measurementProfiles: MeasurementProfile[];
   passwordResetTokens: PasswordResetToken[];
+  carts: Cart[];
+  wishlists: Wishlist[];
 }
 
 export function emptyStore(): DataStore {
@@ -63,6 +67,8 @@ export function emptyStore(): DataStore {
     customerProfiles: [],
     measurementProfiles: [],
     passwordResetTokens: [],
+    carts: [],
+    wishlists: [],
   };
 }
 
@@ -87,6 +93,8 @@ const STORE_COLLECTION_KEYS = [
   "customerProfiles",
   "measurementProfiles",
   "passwordResetTokens",
+  "carts",
+  "wishlists",
 ] as const;
 
 export function migrateStore(raw: unknown): DataStore | null {
@@ -154,6 +162,10 @@ export function migrateStore(raw: unknown): DataStore | null {
     }));
     store.mediaAssets = input.mediaAssets ?? [];
   }
+
+  // v2 → v3: carts and wishlists were introduced. Nothing to convert —
+  // emptyStore() supplies the new collections and every existing record
+  // (accounts, catalog, media) carries over untouched.
 
   store.version = STORE_VERSION;
   return store;
@@ -583,6 +595,30 @@ export function createStoreRepositories(
       },
       async update(profile) {
         return replace(store.measurementProfiles, profile, "Measurement profile");
+      },
+    },
+
+    carts: {
+      async getByCustomerId(customerId) {
+        return store.carts.find((c) => c.customerId === customerId) ?? null;
+      },
+      async create(cart) {
+        return insert(store.carts, cart);
+      },
+      async update(cart) {
+        return replace(store.carts, cart, "Cart");
+      },
+    },
+
+    wishlists: {
+      async getByCustomerId(customerId) {
+        return store.wishlists.find((w) => w.customerId === customerId) ?? null;
+      },
+      async create(wishlist) {
+        return insert(store.wishlists, wishlist);
+      },
+      async update(wishlist) {
+        return replace(store.wishlists, wishlist, "Wishlist");
       },
     },
 

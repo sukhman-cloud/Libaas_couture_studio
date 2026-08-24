@@ -1,29 +1,9 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import { Heart } from "lucide-react";
-import { buttonStyles } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Container, Section } from "@/components/ui/layout";
-import { PageHeader } from "@/components/ui/page-header";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Wishlist" };
-
-export default function WishlistPage() {
-  return (
-    <Container>
-      <Section space="md">
-        <PageHeader title="Wishlist" />
-        <EmptyState
-          icon={Heart}
-          title="Nothing saved yet"
-          description="Pieces you love will live here once the catalog opens."
-          action={
-            <Link href="/shop" className={buttonStyles({ variant: "outline" })}>
-              Browse the shop
-            </Link>
-          }
-        />
-      </Section>
-    </Container>
-  );
+/**
+ * The wishlist lives inside the customer account (it is per-customer data).
+ * This public path is kept so older links and the header icon keep working.
+ */
+export default function WishlistRedirect() {
+  redirect("/account/wishlist");
 }

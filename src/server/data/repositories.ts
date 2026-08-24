@@ -2,6 +2,7 @@ import "server-only";
 import type {
   Appointment,
   AuthCredential,
+  Cart,
   CatalogStatus,
   Category,
   Collection,
@@ -14,6 +15,7 @@ import type {
   Product,
   ProductAvailability,
   User,
+  Wishlist,
 } from "@/types/domain";
 
 /**
@@ -216,6 +218,21 @@ export interface MeasurementProfileRepository {
   update(profile: MeasurementProfile): Promise<MeasurementProfile>;
 }
 
+/* ── Customer commerce (Phase 5A) ───────────────────────────────── */
+
+export interface CartRepository {
+  /** The customer's single active cart, if one exists. */
+  getByCustomerId(customerId: ID): Promise<Cart | null>;
+  create(cart: Cart): Promise<Cart>;
+  update(cart: Cart): Promise<Cart>;
+}
+
+export interface WishlistRepository {
+  getByCustomerId(customerId: ID): Promise<Wishlist | null>;
+  create(wishlist: Wishlist): Promise<Wishlist>;
+  update(wishlist: Wishlist): Promise<Wishlist>;
+}
+
 export interface PasswordResetTokenRepository {
   create(token: PasswordResetToken): Promise<PasswordResetToken>;
   /** Unused, unexpired token by its SHA-256 hash. */
@@ -235,6 +252,8 @@ export interface Repositories {
   customers: CustomerProfileRepository;
   measurementProfiles: MeasurementProfileRepository;
   passwordResetTokens: PasswordResetTokenRepository;
+  carts: CartRepository;
+  wishlists: WishlistRepository;
 }
 
 // Re-exported so consumers can import entity types from one place.
