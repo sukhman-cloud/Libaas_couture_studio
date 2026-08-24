@@ -2,7 +2,9 @@
 
 Boutique application for **Libaas Couture Studio** — customer storefront + admin management, built with Next.js (App Router) + TypeScript + Tailwind CSS v4.
 
-> **Phase 3 (current): Customer identity.** Customer sign-up / login / logout, forgot & reset password, account dashboard, profile, addresses, and measurement profiles — all with server-side ownership checks. Built on the Phase 1 foundation and Phase 2 design system. No catalog/cart/checkout/orders yet — those come in later phases.
+> **Phase 4B (current): Customer catalog browsing.** Shop, categories and collections now render the real catalog the admin manages, with pagination, sorting and full empty/loading/error states. Cart, checkout, wishlist, orders and the full product page come in later phases.
+>
+> Completed so far: **Phase 1** foundation · **Phase 2** design system + app shells · **Phase 3** customer accounts (auth, addresses, measurements) · **Phase 4A** admin catalog (products, categories, collections, media) · **Phase 4B** customer catalog browsing.
 
 ## Run locally (ਲੋਕਲ ਚਲਾਉਣ ਲਈ)
 
@@ -29,17 +31,21 @@ Open http://localhost:3000 (customer) and http://localhost:3000/admin (admin —
 ```
 src/
 ├── app/
-│   ├── (customer)/        # /, /shop, /cart, /wishlist, /search, /collections
+│   ├── (customer)/        # /, /shop, /categories, /collections, /products,
+│   │   │                  #   /search, /cart, /wishlist
 │   │   ├── login, signup, forgot-password, reset-password   # auth pages
 │   │   └── account/       # /account/** — session-verified (profile,
 │   │                      #   addresses, measurements, settings)
 │   ├── admin/
 │   │   ├── login/         # public admin login
 │   │   └── (protected)/   # /admin/** — session-verified shell
-│   └── api/health/        # liveness probe
+│   └── api/
+│       ├── health/        # liveness probe
+│       └── media/[id]/    # serves uploaded catalog media
 ├── components/
 │   ├── ui/                # design-system primitives (Button, Input, Card, …)
 │   ├── layout/            # header, footer, bottom nav, admin sidebar
+│   ├── catalog/           # customer product card / grid / toolbar
 │   ├── account/           # customer auth & account components
 │   └── admin/             # admin-specific building blocks
 ├── config/                # site facts (placeholders!), nav, measurement catalog
@@ -64,7 +70,9 @@ src/
 
 ## Deployment (later)
 
-The project is a standard Next.js app at the repo root — pushing to GitHub and importing into Vercel will work without extra configuration. Set the env vars from `.env.example` in Vercel when that time comes. (No git repository is initialized yet, per the owner's instruction.)
+The project is a standard Next.js app at the repo root — importing this repository into Vercel will work without extra configuration. Set the env vars from `.env.example` in Vercel when that time comes.
+
+Note: the local JSON data provider (`.data/dev-store.json`) is single-process and is **not** suitable for a serverless deployment; a database provider replaces it behind the same repository interfaces in a later phase.
 
 ## Legacy
 
