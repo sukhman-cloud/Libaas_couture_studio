@@ -51,9 +51,35 @@ export type ProductSort =
  * customer catalog reuses the same repository (typically with
  * `status: "published"`), so there is only ever one product model.
  */
+/** Fields free-text search may look at. */
+export type ProductSearchField =
+  | "name"
+  | "sku"
+  | "slug"
+  | "tags"
+  | "shortDescription"
+  | "description";
+
+/** Admin search covers internal identifiers; the public catalog does not. */
+export const ADMIN_SEARCH_FIELDS: ProductSearchField[] = [
+  "name",
+  "sku",
+  "slug",
+  "tags",
+];
+
+export const PUBLIC_SEARCH_FIELDS: ProductSearchField[] = [
+  "name",
+  "shortDescription",
+  "description",
+  "tags",
+];
+
 export interface ProductQuery extends ListParams {
-  /** Free text over name, SKU and tags. */
+  /** Free text; see `searchFields` for what it looks at. */
   search?: string;
+  /** Defaults to ADMIN_SEARCH_FIELDS. */
+  searchFields?: ProductSearchField[];
   status?: CatalogStatus;
   /** Exclude archived rows without pinning a single status. */
   excludeArchived?: boolean;
@@ -66,12 +92,32 @@ export interface ProductQuery extends ListParams {
   fabric?: string;
   colour?: string;
   occasion?: string;
+  work?: string;
   tag?: string;
+  /** Inclusive bounds in integer paise, compared to the effective price. */
+  priceMin?: number;
+  priceMax?: number;
   sort?: ProductSort;
+}
+
+/**
+ * Filter options derived from real catalog data — never a hardcoded
+ * vocabulary. Values a DB implementation would produce with SELECT DISTINCT.
+ */
+export interface CatalogFacets {
+  fabrics: string[];
+  colours: string[];
+  occasions: string[];
+  works: string[];
+  availabilities: ProductAvailability[];
+  /** Effective-price bounds in paise across the matching set. */
+  priceRange: { min: number; max: number } | null;
 }
 
 export interface ProductRepository {
   query(query?: ProductQuery): Promise<Paged<Product>>;
+  /** Distinct attribute values + price bounds for the matching set. */
+  facets(query?: ProductQuery): Promise<CatalogFacets>;
   list(params?: ListParams): Promise<Product[]>;
   getById(id: ID): Promise<Product | null>;
   getBySlug(slug: string): Promise<Product | null>;
@@ -192,4 +238,12 @@ export interface Repositories {
 }
 
 // Re-exported so consumers can import entity types from one place.
-export type { Product, Category, Collection, MediaAsset, Order, Appointment };
+export type {
+  Product,
+  ProductAvailability,
+  Category,
+  Collection,
+  MediaAsset,
+  Order,
+  Appointment,
+};

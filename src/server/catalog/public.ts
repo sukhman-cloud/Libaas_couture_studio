@@ -1,7 +1,12 @@
 import "server-only";
 import type { ProductCardData } from "@/components/catalog/product-card";
+import type { CatalogFilterParams } from "@/lib/catalog/shop-params";
 import { getRepositories } from "@/server/data";
-import type { ProductQuery } from "@/server/data/repositories";
+import {
+  PUBLIC_SEARCH_FIELDS,
+  type CatalogFacets,
+  type ProductQuery,
+} from "@/server/data/repositories";
 import type {
   Category,
   Collection,
@@ -18,7 +23,7 @@ import type {
  * as the admin catalog — there is no second customer product model.
  */
 
-/** Filters a customer query can carry. Grows in Phase 4C. */
+/** Filters a customer query can carry (already resolved to ids). */
 export type PublicProductFilters = Pick<
   ProductQuery,
   | "categoryId"
@@ -27,13 +32,54 @@ export type PublicProductFilters = Pick<
   | "fabric"
   | "colour"
   | "occasion"
+  | "work"
   | "tag"
   | "stitchingAvailable"
   | "customizationAvailable"
   | "featured"
   | "search"
+  | "priceMin"
+  | "priceMax"
   | "sort"
 >;
+
+/**
+ * Turn URL params (slugs, yes/no, paise) into repository filters.
+ * Unknown category/collection slugs resolve to nothing rather than
+ * throwing — a hand-edited URL must degrade gracefully.
+ */
+export async function resolveCatalogFilters(
+  params: CatalogFilterParams,
+): Promise<{ filters: PublicProductFilters; unknown: string[] }> {
+  const filters: PublicProductFilters = {};
+  const unknown: string[] = [];
+
+  if (params.category) {
+    const category = await getPublishedCategoryBySlug(params.category);
+    if (category) filters.categoryId = category.id;
+    else unknown.push("category");
+  }
+  if (params.collection) {
+    const collection = await getPublishedCollectionBySlug(params.collection);
+    if (collection) filters.collectionId = collection.id;
+    else unknown.push("collection");
+  }
+
+  if (params.q) filters.search = params.q;
+  if (params.fabric) filters.fabric = params.fabric;
+  if (params.colour) filters.colour = params.colour;
+  if (params.occasion) filters.occasion = params.occasion;
+  if (params.work) filters.work = params.work;
+  if (params.availability) filters.availability = params.availability;
+  if (params.stitching) filters.stitchingAvailable = params.stitching === "yes";
+  if (params.customization) {
+    filters.customizationAvailable = params.customization === "yes";
+  }
+  if (params.minPrice !== undefined) filters.priceMin = params.minPrice;
+  if (params.maxPrice !== undefined) filters.priceMax = params.maxPrice;
+
+  return { filters, unknown };
+}
 
 export interface PublicProductPage {
   products: Product[];
@@ -56,6 +102,8 @@ export async function listPublishedProducts(
     ...filters,
     // Publication rule — never overridable by a caller.
     status: "published",
+    // Customer search never looks at internal identifiers (SKU/slug).
+    searchFields: PUBLIC_SEARCH_FIELDS,
     limit: perPage,
     offset: (safePage - 1) * perPage,
   });
@@ -153,6 +201,20 @@ export function toProductCards(
         : undefined,
       image: media ? { mediaId: media.mediaId, alt: media.alt } : undefined,
     };
+  });
+}
+
+/**
+ * Filter options, derived from the published catalog only. Options for a
+ * value nobody uses are never offered, and scoping to `within` (e.g. the
+ * current category page) keeps the choices relevant.
+ */
+export async function getCatalogFacets(
+  within: PublicProductFilters = {},
+): Promise<CatalogFacets> {
+  return getRepositories().products.facets({
+    ...within,
+    status: "published",
   });
 }
 

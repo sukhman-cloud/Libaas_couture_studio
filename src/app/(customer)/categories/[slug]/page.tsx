@@ -2,22 +2,25 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Store } from "lucide-react";
-import { CatalogToolbar } from "@/components/catalog/catalog-toolbar";
-import { ProductGrid } from "@/components/catalog/product-grid";
+import { CatalogBrowser } from "@/components/catalog/catalog-browser";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { buttonStyles } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Container, Section } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
-import { Pagination } from "@/components/ui/pagination";
 import {
+  catalogHref,
   parseCatalogParams,
   type CatalogSearchParams,
 } from "@/lib/catalog/shop-params";
 import {
+  getCatalogFacets,
   getPublishedCategoryBySlug,
+  listPublishedCategories,
+  listPublishedCollections,
   listPublishedProducts,
   publishedCategoryNames,
+  resolveCatalogFilters,
   toProductCards,
 } from "@/server/catalog/public";
 
@@ -51,13 +54,25 @@ export default async function CategoryPage({
   if (!category) notFound();
 
   const search = await searchParams;
-  const { page, sortValue, filters, active } = parseCatalogParams(search);
+  const parsed = parseCatalogParams(search);
+  const { filters } = await resolveCatalogFilters(parsed.filters);
 
   const basePath = `/categories/${category.slug}`;
-  const [result, categoryNames] = await Promise.all([
-    listPublishedProducts({ ...filters, categoryId: category.id }, page),
-    publishedCategoryNames(),
-  ]);
+  // The category itself is fixed by the route, so it is never a URL filter.
+  const scoped = { ...filters, categoryId: category.id };
+
+  const [result, categoryNames, categories, collections, facets] =
+    await Promise.all([
+      listPublishedProducts({ ...scoped, sort: parsed.sort }, parsed.page),
+      publishedCategoryNames(),
+      listPublishedCategories(),
+      listPublishedCollections(),
+      getCatalogFacets({ categoryId: category.id }),
+    ]);
+
+  const labels = Object.fromEntries(
+    collections.map((collection) => [collection.slug, collection.name]),
+  );
 
   return (
     <Container>
@@ -75,38 +90,50 @@ export default async function CategoryPage({
           description={category.description}
         />
 
-        {result.total === 0 ? (
-          <EmptyState
-            icon={Store}
-            title="Nothing in this category yet"
-            description="Pieces will appear here as the studio publishes them."
-            action={
-              <Link href="/shop" className={buttonStyles({ variant: "outline" })}>
-                Browse the shop
-              </Link>
-            }
-          />
-        ) : (
-          <>
-            <CatalogToolbar
-              basePath={basePath}
-              active={active}
-              sortValue={sortValue}
-              total={result.total}
-              hasFilters={false}
-            />
-            <ProductGrid
-              products={toProductCards(result.products, categoryNames)}
-            />
-            <Pagination
-              className="mt-10 flex justify-center"
-              page={result.page}
-              pageCount={result.pageCount}
-              basePath={basePath}
-              params={active}
-            />
-          </>
-        )}
+        <CatalogBrowser
+          basePath={basePath}
+          products={toProductCards(result.products, categoryNames)}
+          total={result.total}
+          page={result.page}
+          pageCount={result.pageCount}
+          active={parsed.active}
+          sortValue={parsed.sortValue}
+          filters={parsed.filters}
+          filterCount={parsed.filterCount}
+          facets={facets}
+          categories={categories}
+          collections={collections}
+          labels={labels}
+          hideCategory
+          emptyState={
+            parsed.filterCount > 0 ? (
+              <EmptyState
+                icon={Store}
+                title="No products match your selection"
+                description="Try removing a filter to see everything in this category."
+                action={
+                  <Link
+                    href={catalogHref(basePath, {})}
+                    className={buttonStyles({ variant: "outline" })}
+                  >
+                    Clear filters
+                  </Link>
+                }
+              />
+            ) : (
+              <EmptyState
+                icon={Store}
+                title="Nothing in this category yet"
+                description="Pieces will appear here as the studio publishes them."
+                action={
+                  <Link href="/shop" className={buttonStyles({ variant: "outline" })}>
+                    Browse the shop
+                  </Link>
+                }
+              />
+            )
+          }
+        />
       </Section>
     </Container>
   );

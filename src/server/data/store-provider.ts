@@ -13,12 +13,16 @@ import type {
   Product,
   User,
 } from "@/types/domain";
-import type {
-  CategoryQuery,
-  CollectionQuery,
-  ListParams,
-  Paged,
-  Repositories,
+import {
+  ADMIN_SEARCH_FIELDS,
+  type CatalogFacets,
+  type CategoryQuery,
+  type CollectionQuery,
+  type ListParams,
+  type Paged,
+  type ProductQuery,
+  type ProductSort,
+  type Repositories,
 } from "@/server/data/repositories";
 
 /**
@@ -172,6 +176,97 @@ function matchesText(haystacks: Array<string | undefined>, needle: string) {
   return haystacks.some((value) => value?.toLowerCase().includes(term));
 }
 
+/** The price a customer would pay — sale price when one is set. */
+export function effectivePrice(product: Product): number {
+  return product.salePrice?.amount ?? product.price.amount;
+}
+
+/**
+ * Single source of truth for product filtering, shared by `query` and
+ * `facets` so the two can never drift. Filters combine with AND.
+ */
+function productMatches(product: Product, query: ProductQuery): boolean {
+  if (query.excludeArchived && product.status === "archived") return false;
+  if (query.status && product.status !== query.status) return false;
+  if (query.availability && product.availability !== query.availability) {
+    return false;
+  }
+  if (
+    query.categoryId &&
+    product.categoryId !== query.categoryId &&
+    !product.secondaryCategoryIds.includes(query.categoryId)
+  ) {
+    return false;
+  }
+  if (query.collectionId && !product.collectionIds.includes(query.collectionId)) {
+    return false;
+  }
+  if (query.featured !== undefined && product.isFeatured !== query.featured) {
+    return false;
+  }
+  if (
+    query.stitchingAvailable !== undefined &&
+    product.stitchingAvailable !== query.stitchingAvailable
+  ) {
+    return false;
+  }
+  if (
+    query.customizationAvailable !== undefined &&
+    product.customizationAvailable !== query.customizationAvailable
+  ) {
+    return false;
+  }
+  if (query.fabric && product.attributes.fabric !== query.fabric) return false;
+  if (query.colour && product.attributes.colour !== query.colour) return false;
+  if (query.occasion && product.attributes.occasion !== query.occasion) {
+    return false;
+  }
+  if (query.work && product.attributes.work !== query.work) return false;
+  if (query.tag && !product.tags.includes(query.tag)) return false;
+
+  if (query.priceMin !== undefined || query.priceMax !== undefined) {
+    const price = effectivePrice(product);
+    if (query.priceMin !== undefined && price < query.priceMin) return false;
+    if (query.priceMax !== undefined && price > query.priceMax) return false;
+  }
+
+  if (query.search) {
+    const fields = query.searchFields ?? ADMIN_SEARCH_FIELDS;
+    const haystacks: Array<string | undefined> = [];
+    for (const field of fields) {
+      if (field === "tags") haystacks.push(product.tags.join(" "));
+      else haystacks.push(product[field]);
+    }
+    if (!matchesText(haystacks, query.search)) return false;
+  }
+
+  return true;
+}
+
+function sortProducts(rows: Product[], sort: ProductSort | undefined) {
+  const sorted = [...rows];
+  switch (sort ?? "updated_desc") {
+    case "created_desc":
+      sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      break;
+    case "name_asc":
+      sorted.sort((a, b) => a.name.localeCompare(b.name));
+      break;
+    case "name_desc":
+      sorted.sort((a, b) => b.name.localeCompare(a.name));
+      break;
+    case "price_asc":
+      sorted.sort((a, b) => effectivePrice(a) - effectivePrice(b));
+      break;
+    case "price_desc":
+      sorted.sort((a, b) => effectivePrice(b) - effectivePrice(a));
+      break;
+    default:
+      sorted.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+  return sorted;
+}
+
 export function createStoreRepositories(
   store: DataStore,
   persist: () => Promise<void>,
@@ -230,83 +325,39 @@ export function createStoreRepositories(
   return {
     products: {
       async query(query = {}) {
-        let rows = store.products;
+        const rows = store.products.filter((p) => productMatches(p, query));
+        return page(sortProducts(rows, query.sort), query);
+      },
+      async facets(query = {}) {
+        // Same predicate as `query`, so options always match what a search
+        // would actually return.
+        const rows = store.products.filter((p) => productMatches(p, query));
 
-        if (query.excludeArchived) {
-          rows = rows.filter((p) => p.status !== "archived");
-        }
-        if (query.status) rows = rows.filter((p) => p.status === query.status);
-        if (query.availability) {
-          rows = rows.filter((p) => p.availability === query.availability);
-        }
-        if (query.categoryId) {
-          rows = rows.filter(
-            (p) =>
-              p.categoryId === query.categoryId ||
-              p.secondaryCategoryIds.includes(query.categoryId!),
-          );
-        }
-        if (query.collectionId) {
-          rows = rows.filter((p) =>
-            p.collectionIds.includes(query.collectionId!),
-          );
-        }
-        if (query.featured !== undefined) {
-          rows = rows.filter((p) => p.isFeatured === query.featured);
-        }
-        if (query.stitchingAvailable !== undefined) {
-          rows = rows.filter(
-            (p) => p.stitchingAvailable === query.stitchingAvailable,
-          );
-        }
-        if (query.customizationAvailable !== undefined) {
-          rows = rows.filter(
-            (p) => p.customizationAvailable === query.customizationAvailable,
-          );
-        }
-        if (query.fabric) {
-          rows = rows.filter((p) => p.attributes.fabric === query.fabric);
-        }
-        if (query.colour) {
-          rows = rows.filter((p) => p.attributes.colour === query.colour);
-        }
-        if (query.occasion) {
-          rows = rows.filter((p) => p.attributes.occasion === query.occasion);
-        }
-        if (query.tag) {
-          rows = rows.filter((p) => p.tags.includes(query.tag!));
-        }
-        if (query.search) {
-          const term = query.search;
-          rows = rows.filter(
-            (p) =>
-              matchesText([p.name, p.sku, p.slug], term) ||
-              p.tags.some((tag) => matchesText([tag], term)),
-          );
-        }
+        const distinct = (
+          pick: (product: Product) => string | undefined,
+        ): string[] =>
+          Array.from(
+            new Set(
+              rows
+                .map(pick)
+                .filter((value): value is string => Boolean(value?.trim())),
+            ),
+          ).sort((a, b) => a.localeCompare(b));
 
-        const sorted = [...rows];
-        switch (query.sort ?? "updated_desc") {
-          case "created_desc":
-            sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-            break;
-          case "name_asc":
-            sorted.sort((a, b) => a.name.localeCompare(b.name));
-            break;
-          case "name_desc":
-            sorted.sort((a, b) => b.name.localeCompare(a.name));
-            break;
-          case "price_asc":
-            sorted.sort((a, b) => a.price.amount - b.price.amount);
-            break;
-          case "price_desc":
-            sorted.sort((a, b) => b.price.amount - a.price.amount);
-            break;
-          default:
-            sorted.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-        }
-
-        return page(sorted, query);
+        const prices = rows.map(effectivePrice);
+        const facets: CatalogFacets = {
+          fabrics: distinct((p) => p.attributes.fabric),
+          colours: distinct((p) => p.attributes.colour),
+          occasions: distinct((p) => p.attributes.occasion),
+          works: distinct((p) => p.attributes.work),
+          availabilities: Array.from(
+            new Set(rows.map((p) => p.availability)),
+          ).sort(),
+          priceRange: prices.length
+            ? { min: Math.min(...prices), max: Math.max(...prices) }
+            : null,
+        };
+        return facets;
       },
       async list(params) {
         return paginate(
