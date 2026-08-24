@@ -1,0 +1,129 @@
+@import "tailwindcss";
+
+/* ════════════════════════════════════════════════════════════════
+   Libaas Couture Studio — design tokens
+   Single source of truth for the theme. Adjust brand values here;
+   components consume tokens, never raw hex values.
+
+   NOTE: the current palette is derived from the boutique's logo
+   (deep navy + antique gold). It is intentionally centralized so the
+   owner can swap final brand values in one place.
+   ════════════════════════════════════════════════════════════════ */
+
+@theme {
+  /* Brand — navy (primary) */
+  --color-navy-50: #eef1f6;
+  --color-navy-100: #d9deea;
+  --color-navy-200: #b3bdd4;
+  --color-navy-300: #8494b5;
+  --color-navy-400: #5a6b8f;
+  --color-navy-500: #3a4763;
+  --color-navy-600: #2c3650;
+  --color-navy-700: #232c40;
+  --color-navy-800: #1c2333;
+  --color-navy-900: #141a28;
+  --color-navy-950: #0e1220;
+
+  /* Brand — gold (accent) */
+  --color-gold-100: #f4ead3;
+  --color-gold-200: #e9d7b4;
+  --color-gold-300: #dcc08a;
+  --color-gold-400: #d1af6e;
+  --color-gold-500: #c6a15b;
+  --color-gold-600: #a9823f;
+  --color-gold-700: #8a6a33;
+
+  /* Surfaces — warm ivory */
+  --color-cream-50: #faf6ef;
+  --color-cream-100: #f3ede1;
+  --color-cream-200: #e9e0cf;
+
+  /* Neutrals / text */
+  --color-ink: #1c2130;
+  --color-muted: #6e6b64;
+
+  /* Status */
+  --color-success: #2f7d4f;
+  --color-warning: #a97b1f;
+  --color-danger: #b03030;
+
+  /*
+   * Semantic aliases — the theme contract for components.
+   * Rebrand by remapping these (and the brand scales above); component
+   * code never needs to change.
+   */
+  --color-primary: var(--color-navy-700);
+  --color-primary-strong: var(--color-navy-800);
+  --color-accent: var(--color-gold-500);
+  --color-background: var(--color-cream-50);
+  --color-surface: #ffffff;
+  --color-border: var(--color-cream-200);
+  --color-foreground: var(--color-ink);
+
+  /* Typography (wired to next/font variables in the root layout) */
+  --font-display: var(--font-cormorant), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-jost), "Segoe UI", Arial, sans-serif;
+
+  /* Motion */
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── Base ─────────────────────────────────────────────────────── */
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-cream-50 text-ink antialiased;
+    font-family: var(--font-sans);
+  }
+
+  ::selection {
+    @apply bg-navy-700 text-cream-50;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+  }
+
+  /* Keyboard focus must always be visible. */
+  :focus-visible {
+    outline: 2px solid var(--color-gold-500);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* ── Small shared utilities ───────────────────────────────────── */
+
+@utility container-page {
+  /* Controlled max width for large screens — content never stretches. */
+  width: 100%;
+  max-width: 80rem; /* 1280px */
+  margin-inline: auto;
+  padding-inline: 1rem;
+
+  @media (min-width: 640px) {
+    padding-inline: 1.5rem;
+  }
+  @media (min-width: 1024px) {
+    padding-inline: 2rem;
+  }
+}

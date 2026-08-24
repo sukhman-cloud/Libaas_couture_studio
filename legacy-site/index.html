@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Libaas Couture Studio — Designer Suits & Handwork · Sector 79, Mohali</title>
+  <meta name="description" content="Libaas Couture Studio, Sector 79 Mohali — designer suits, handwork & machine work, custom stitching & bridal couture. Styled by Harpreet.">
+  <link rel="icon" type="image/jpeg" href="assets/logo-original.jpg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Jost:wght@300;400;500;600&family=Noto+Serif+Gurmukhi:wght@400;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ══════════ PRELOADER ══════════ -->
+  <div class="preloader" id="preloader" aria-hidden="true">
+    <div class="preloader-inner">
+      <div class="pre-logo-wrap">
+        <svg class="pre-emblem" viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="pre-ring pre-ring-1" cx="60" cy="60" r="56" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <circle class="pre-ring pre-ring-2" cx="60" cy="60" r="50" fill="none" stroke="currentColor" stroke-width="0.7"/>
+        </svg>
+        <img class="pre-logo" src="assets/logo-original.jpg" alt="Libaas Couture Studio logo">
+      </div>
+      <p class="pre-word">Libaas <em>Couture Studio</em></p>
+      <span class="pre-line"></span>
+    </div>
+  </div>
+
+  <!-- Scroll progress bar -->
+  <div class="progress-bar" id="progressBar"></div>
+
+  <!-- Custom cursor (desktop only) -->
+  <div class="cursor-dot" id="cursorDot"></div>
+  <div class="cursor-ring" id="cursorRing"></div>
+
+  <!-- ══════════ HEADER ══════════ -->
+  <header class="site-header" id="siteHeader">
+    <div class="container header-inner">
+      <a href="#home" class="brand" aria-label="Libaas Couture Studio — home">
+        <span class="brand-mark">
+          <img src="assets/logo-original.jpg" alt="">
+        </span>
+        <span class="brand-text">
+          <span class="brand-name">Libaas</span>
+          <span class="brand-sub">Couture Studio</span>
+        </span>
+      </a>
+
+      <nav class="site-nav" id="siteNav" aria-label="Primary">
+        <ul class="nav-list">
+          <li><a href="#home" class="nav-link is-active">Home</a></li>
+          <li><a href="#story" class="nav-link">Story</a></li>
+          <li><a href="#collections" class="nav-link">Collections</a></li>
+          <li><a href="#services" class="nav-link">Services</a></li>
+          <li><a href="#lookbook" class="nav-link">Lookbook</a></li>
+          <li><a href="#reviews" class="nav-link">Reviews</a></li>
+          <li><a href="#visit" class="nav-link">Visit Us</a></li>
+        </ul>
+        <a href="#visit" class="btn btn-gold nav-cta">Book Appointment</a>
+      </nav>
+
+      <button type="button" class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false" aria-controls="siteNav">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ══════════ HERO ══════════ -->
+    <section class="hero" id="home">
+      <div class="hero-bg" aria-hidden="true">
+        <span class="hero-blob hero-blob-1" data-parallax="0.18"></span>
+        <span class="hero-blob hero-blob-2" data-parallax="0.10"></span>
+        <svg class="paisley paisley-1" data-parallax="0.25" viewBox="0 0 100 100"><path d="M50 8 C78 8 92 32 88 54 C84 78 62 92 44 88 C28 84 20 70 24 56 C28 44 40 38 50 42 C58 46 60 56 54 62 C50 66 44 64 42 60" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <svg class="paisley paisley-2" data-parallax="0.14" viewBox="0 0 100 100"><path d="M50 8 C78 8 92 32 88 54 C84 78 62 92 44 88 C28 84 20 70 24 56 C28 44 40 38 50 42 C58 46 60 56 54 62 C50 66 44 64 42 60" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span class="hero-ring" data-parallax="0.08"></span>
+      </div>
+
+      <div class="container hero-inner">
+        <div class="hero-copy">
+          <p class="hero-eyebrow" data-hero="1">
+            <span class="gurmukhi">ਲਿਬਾਸ</span> · Couture Studio — Sector 79, Mohali
+          </p>
+          <h1 class="hero-title" id="heroTitle">Stitched with love, draped in <em>elegance.</em></h1>
+          <p class="hero-lead" data-hero="3">Designer suits, bridal couture, handwork &amp; custom stitching —
+            designed on you, crafted for you at Sector 79, Mohali. Shipping all over India.</p>
+          <div class="hero-actions" data-hero="4">
+            <a href="#visit" class="btn btn-gold" data-magnetic>Book an Appointment</a>
+            <a href="#collections" class="btn btn-ghost" data-magnetic>Explore Collections</a>
+          </div>
+          <ul class="hero-badges" data-hero="5">
+            <li><span class="badge-dot"></span>Handwork &amp; Machine Experts</li>
+            <li><span class="badge-dot"></span>Styled by Harpreet</li>
+            <li><span class="badge-dot"></span>Pan-India Shipping</li>
+          </ul>
+        </div>
+
+        <div class="hero-visual" data-hero="2">
+          <figure class="hero-card hero-card-main" data-tilt>
+            <div class="img-frame ph-bridal">
+              <img src="https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=900&q=80" alt="Bridal couture at Libaas Couture Studio" loading="eager">
+            </div>
+            <figcaption>Bridal Couture ’26</figcaption>
+          </figure>
+          <figure class="hero-card hero-card-small" data-tilt data-parallax="0.06">
+            <div class="img-frame ph-suit">
+              <img src="https://images.unsplash.com/photo-1583391733956-6c78276477e2?auto=format&fit=crop&w=600&q=80" alt="Hand embroidered Punjabi suit" loading="eager">
+            </div>
+            <figcaption>Phulkari Edit</figcaption>
+          </figure>
+          <div class="hero-stamp" aria-hidden="true">
+            <svg viewBox="0 0 100 100">
+              <defs><path id="circlePath" d="M50,50 m-38,0 a38,38 0 1,1 76,0 a38,38 0 1,1 -76,0"/></defs>
+              <text><textPath href="#circlePath">· LIBAAS COUTURE STUDIO · MOHALI · EST. SECTOR 79 </textPath></text>
+              <text class="stamp-center" x="50" y="58" text-anchor="middle">✦</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <a href="#story" class="scroll-hint" aria-label="Scroll down">
+        <span class="scroll-hint-line"></span>
+        <span class="scroll-hint-text">Scroll</span>
+      </a>
+    </section>
+
+    <!-- ══════════ MARQUEE ══════════ -->
+    <div class="marquee" aria-hidden="true">
+      <div class="marquee-track">
+        <span>Bridal Couture</span><i>✦</i><span>Punjabi Suits</span><i>✦</i><span>Hand Embroidery</span><i>✦</i><span>Lehengas</span><i>✦</i><span>Phulkari</span><i>✦</i><span>Sarees &amp; Drapes</span><i>✦</i><span>Indo-Western</span><i>✦</i><span>Custom Stitching</span><i>✦</i>
+        <span>Bridal Couture</span><i>✦</i><span>Punjabi Suits</span><i>✦</i><span>Hand Embroidery</span><i>✦</i><span>Lehengas</span><i>✦</i><span>Phulkari</span><i>✦</i><span>Sarees &amp; Drapes</span><i>✦</i><span>Indo-Western</span><i>✦</i><span>Custom Stitching</span><i>✦</i>
+      </div>
+    </div>
+
+    <!-- ══════════ STORY ══════════ -->
+    <section class="section story" id="story">
+      <div class="container story-grid">
+        <div class="story-visual" data-reveal="right">
+          <div class="story-img img-frame ph-atelier" data-tilt>
+            <img src="https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&w=900&q=80" alt="Inside the Libaas Couture atelier" loading="lazy">
+          </div>
+          <div class="story-chip" data-reveal="zoom" data-delay="300">
+            <strong>ਲਿਬਾਸ</strong>
+            <span>“Libaas” — the attire that carries your story</span>
+          </div>
+        </div>
+
+        <div class="story-copy">
+          <p class="eyebrow" data-reveal="up">Our Story · ਸਾਡੀ ਕਹਾਣੀ</p>
+          <h2 class="title" data-reveal="up" data-delay="80">A studio where fabric meets <em>feeling.</em></h2>
+          <p data-reveal="up" data-delay="160">“Libaas” means attire — but at our Sector 79 studio it means much more.
+            Every outfit begins as a conversation over chai: your occasion, your comfort, the dupatta your
+            grandmother wore. Then — styled by our designer Harpreet — our master artisans translate
+            it into thread, zari and silk.</p>
+          <p data-reveal="up" data-delay="220">From wedding-day lehengas to everyday Punjabi suits, everything is
+            measured on you, stitched in-house and finished by hand — nothing off a shelf, nothing repeated twice.</p>
+
+          <ul class="stats" data-stagger>
+            <li><strong><span data-count="12">0</span>+</strong><span>Years of craft</span></li>
+            <li><strong><span data-count="5000">0</span>+</strong><span>Outfits delivered</span></li>
+            <li><strong><span data-count="2000">0</span>+</strong><span>Happy clients</span></li>
+            <li><strong><span data-count="15">0</span></strong><span>Master artisans</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ COLLECTIONS ══════════ -->
+    <section class="section collections" id="collections">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow" data-reveal="up">The Wardrobe · ਸੰਗ੍ਰਹਿ</p>
+          <h2 class="title" data-reveal="up" data-delay="80">Signature <em>Collections</em></h2>
+          <p class="section-sub" data-reveal="up" data-delay="140">Every piece below is a canvas — colours, fabric and embroidery are tailored to you.</p>
+        </div>
+
+        <div class="filter-bar" data-reveal="up" data-delay="180" aria-label="Filter collections">
+          <button type="button" class="filter-btn is-active" data-filter="all">All</button>
+          <button type="button" class="filter-btn" data-filter="bridal">Bridal</button>
+          <button type="button" class="filter-btn" data-filter="suits">Suits</button>
+          <button type="button" class="filter-btn" data-filter="lehenga">Lehengas</button>
+          <button type="button" class="filter-btn" data-filter="saree">Sarees</button>
+          <button type="button" class="filter-btn" data-filter="indo">Indo-Western</button>
+        </div>
+
+        <div class="cards-grid" id="collectionGrid">
+          <article class="card" data-cat="bridal" data-reveal="up">
+            <div class="card-media img-frame ph-bridal">
+              <img src="https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=800&q=80" alt="Regal bridal lehenga" loading="lazy">
+              <span class="card-tag">Bridal</span>
+            </div>
+            <div class="card-body">
+              <h3>Regal Bridal Lehenga</h3>
+              <p>Zardozi &amp; dabka on raw silk, cathedral dupatta.</p>
+              <span class="card-price">from ₹45,000</span>
+            </div>
+          </article>
+
+          <article class="card" data-cat="suits" data-reveal="up" data-delay="60">
+            <div class="card-media img-frame ph-suit">
+              <img src="https://images.unsplash.com/photo-1583391733956-6c78276477e2?auto=format&fit=crop&w=800&q=80" alt="Phulkari heritage suit" loading="lazy">
+              <span class="card-tag">Suits</span>
+            </div>
+            <div class="card-body">
+              <h3>Phulkari Heritage Suit</h3>
+              <p>Hand phulkari on chanderi, contrast odhni.</p>
+              <span class="card-price">from ₹8,500</span>
+            </div>
+          </article>
+
+          <article class="card" data-cat="suits" data-reveal="up" data-delay="120">
+            <div class="card-media img-frame ph-velvet">
+              <img src="https://images.unsplash.com/photo-1594736797933-d0501ba2fe65?auto=format&fit=crop&w=800&q=80" alt="Velvet wedding suit" loading="lazy">
+              <span class="card-tag">Suits</span>
+            </div>
+            <div class="card-body">
+              <h3>Velvet Kalidar Suit</h3>
+              <p>Winter-wedding velvet with antique gota work.</p>
+              <span class="card-price">from ₹12,000</span>
+            </div>
+          </article>
+
+          <article class="card" data-cat="saree" data-reveal="up" data-delay="180">
+            <div class="card-media img-frame ph-saree">
+              <img src="https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=800&q=80" alt="Banarasi silk saree" loading="lazy">
+              <span class="card-tag">Sarees</span>
+            </div>
+            <div class="card-body">
+              <h3>Banarasi Silk Saree</h3>
+              <p>Pure silk with custom fall, pico &amp; designer blouse.</p>
+              <span class="card-price">from ₹15,000</span>
+            </div>
+          </article>
+
+          <article class="card" data-cat="lehenga" data-reveal="up">
+            <div class="card-media img-frame ph-pastel">
+              <img src="https://images.unsplash.com/photo-1595777457583-95e059d581b8?auto=format&fit=crop&w=800&q=80" alt="Pastel reception lehenga" loading="lazy">
+              <span class="card-tag">Lehengas</span>
+            </div>
+            <div class="card-body">
+              <h3>Pastel Reception Lehenga</h3>
+              <p>Organza layers, pearl &amp; sequin hand work.</p>
+              <span class="card-price">from ₹28,000</span>
+            </div>
+          </article>
+
+          <article class="card" data-cat="lehenga" data-reveal="up" data-delay="60">
+            <div class="card-media img-frame ph-mirror">
+              <img src="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=800&q=80" alt="Mirror work lehenga" loading="lazy">
+              <span class="card-tag">Lehengas</span>
+            </div>
+            <div class="card-body">
+              <h3>Mirror-Work Mehndi Lehenga</h3>
+              <p>Sheesha embroidery on georgette, tassel latkans.</p>
+              <span class="card-price">from ₹22,000</span>
+            </div>
+          </article>
+
+          <article class="card" data-cat="indo" data-reveal="up" data-delay="120">
+            <div class="card-media img-frame ph-gown">
+              <img src="https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=800&q=80" alt="Organza cape gown" loading="lazy">
+              <span class="card-tag">Indo-Western</span>
+            </div>
+            <div class="card-body">
+              <h3>Organza Cape Gown</h3>
+              <p>Cocktail-ready drape gown with embroidered cape.</p>
+              <span class="card-price">from ₹18,000</span>
+            </div>
+          </article>
+
+          <article class="card" data-cat="indo" data-reveal="up" data-delay="180">
+            <div class="card-media img-frame ph-ivory">
+              <img src="https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&w=800&q=80" alt="Ivory saree gown" loading="lazy">
+              <span class="card-tag">Indo-Western</span>
+            </div>
+            <div class="card-body">
+              <h3>Ivory Saree-Gown</h3>
+              <p>Pre-stitched drape, crystal belt, modern silhouette.</p>
+              <span class="card-price">from ₹16,000</span>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ SERVICES ══════════ -->
+    <section class="section services" id="services">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow" data-reveal="up">What We Do · ਸੇਵਾਵਾਂ</p>
+          <h2 class="title" data-reveal="up" data-delay="80">Crafted <em>Services</em></h2>
+          <p class="section-sub" data-reveal="up" data-delay="140">From a single alteration to a full bridal trousseau — every service, under one roof.</p>
+        </div>
+
+        <div class="services-grid" data-stagger>
+          <article class="service">
+            <span class="service-icon">
+              <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="14" cy="34" r="6"/><circle cx="34" cy="34" r="6"/><path d="M18.5 29.5 38 6M29.5 29.5 10 6"/></svg>
+            </span>
+            <h3>Custom Stitching</h3>
+            <p>Made-to-measure suits, blouses &amp; lehengas — perfect fit, first fitting.</p>
+          </article>
+
+          <article class="service">
+            <span class="service-icon">
+              <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M38 6 10 34l-4 8 8-4L42 10z"/><path d="M6 42c8-2 10 2 18-2"/></svg>
+            </span>
+            <h3>Hand Embroidery</h3>
+            <p>Zardozi, dabka, sheesha, cut-dana &amp; phulkari by master karigars.</p>
+          </article>
+
+          <article class="service">
+            <span class="service-icon">
+              <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 18l8 6 8-10 8 10 8-6-3 22H11z"/><circle cx="8" cy="14" r="2.5"/><circle cx="24" cy="10" r="2.5"/><circle cx="40" cy="14" r="2.5"/></svg>
+            </span>
+            <h3>Bridal Couture</h3>
+            <p>Full bridal journey — sketches, trials, trousseau &amp; wedding-day styling.</p>
+          </article>
+
+          <article class="service">
+            <span class="service-icon">
+              <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 14c8 8 12-8 20 0s12-8 16 0"/><path d="M6 26c8 8 12-8 20 0s12-8 16 0"/><path d="M6 38c8 8 12-8 20 0s12-8 16 0"/></svg>
+            </span>
+            <h3>Dupatta &amp; Odhni Work</h3>
+            <p>Gota kinari, tassels, dye-matching &amp; heritage dupatta revival.</p>
+          </article>
+
+          <article class="service">
+            <span class="service-icon">
+              <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="18" width="36" height="12" rx="2"/><path d="M12 18v6M18 18v4M24 18v6M30 18v4M36 18v6"/></svg>
+            </span>
+            <h3>Alterations &amp; Restyling</h3>
+            <p>Resize, restyle or revive — give an old favourite a new life.</p>
+          </article>
+
+          <article class="service">
+            <span class="service-icon">
+              <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10h32v22H26l-8 8v-8H8z"/><path d="M16 18h16M16 24h10"/></svg>
+            </span>
+            <h3>Style Consultation</h3>
+            <p>Colour, cut &amp; fabric guidance for your body type and occasion.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ PROCESS ══════════ -->
+    <section class="section process" id="process">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow" data-reveal="up">The Journey · ਸਫ਼ਰ</p>
+          <h2 class="title" data-reveal="up" data-delay="80">From <em>idea</em> to outfit</h2>
+        </div>
+
+        <ol class="steps" data-stagger>
+          <li class="step">
+            <span class="step-num">01</span>
+            <h3>Consultation</h3>
+            <p>Chai, mood-boards and your story — we sketch the vision together.</p>
+          </li>
+          <li class="step">
+            <span class="step-num">02</span>
+            <h3>Fabric &amp; Design</h3>
+            <p>Hand-picked fabrics, embroidery samples and a final design lock.</p>
+          </li>
+          <li class="step">
+            <span class="step-num">03</span>
+            <h3>Crafting</h3>
+            <p>Cutting, stitching and hand embroidery in our in-house atelier.</p>
+          </li>
+          <li class="step">
+            <span class="step-num">04</span>
+            <h3>Fitting &amp; Finish</h3>
+            <p>Trial, micro-adjustments, steam press — and your grand reveal.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ══════════ LOOKBOOK ══════════ -->
+    <section class="section lookbook" id="lookbook">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow" data-reveal="up">Gallery · ਝਲਕ</p>
+          <h2 class="title" data-reveal="up" data-delay="80">The <em>Lookbook</em></h2>
+          <p class="section-sub" data-reveal="up" data-delay="140">Tap any look to view it up close.</p>
+        </div>
+
+        <div class="look-grid" id="lookGrid">
+          <button type="button" class="look tall ph-bridal" data-reveal="up" data-caption="Bridal Couture — Deep Rose">
+            <img src="https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=700&q=80" alt="Bridal couture look" loading="lazy">
+          </button>
+          <button type="button" class="look ph-suit" data-reveal="up" data-delay="60" data-caption="Phulkari Edit — Festive">
+            <img src="https://images.unsplash.com/photo-1583391733956-6c78276477e2?auto=format&fit=crop&w=700&q=80" alt="Phulkari suit look" loading="lazy">
+          </button>
+          <button type="button" class="look ph-saree" data-reveal="up" data-delay="120" data-caption="Silk Sarees — Heritage">
+            <img src="https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=700&q=80" alt="Silk saree drapes" loading="lazy">
+          </button>
+          <button type="button" class="look tall ph-pastel" data-reveal="up" data-delay="90" data-caption="Reception Pastels">
+            <img src="https://images.unsplash.com/photo-1595777457583-95e059d581b8?auto=format&fit=crop&w=700&q=80" alt="Pastel lehenga look" loading="lazy">
+          </button>
+          <button type="button" class="look ph-atelier" data-reveal="up" data-delay="150" data-caption="Inside the Atelier">
+            <img src="https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&w=700&q=80" alt="Atelier rack" loading="lazy">
+          </button>
+          <button type="button" class="look ph-gown" data-reveal="up" data-delay="180" data-caption="Indo-Western Evenings">
+            <img src="https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&w=700&q=80" alt="Evening gown look" loading="lazy">
+          </button>
+          <button type="button" class="look ph-velvet" data-reveal="up" data-delay="210" data-caption="Velvet Winter Weddings">
+            <img src="https://images.unsplash.com/photo-1594736797933-d0501ba2fe65?auto=format&fit=crop&w=700&q=80" alt="Velvet suit look" loading="lazy">
+          </button>
+          <button type="button" class="look ph-ivory" data-reveal="up" data-delay="240" data-caption="Ivory Saree-Gown">
+            <img src="https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&w=700&q=80" alt="Ivory look" loading="lazy">
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ REVIEWS ══════════ -->
+    <section class="section reviews" id="reviews">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow" data-reveal="up">Kind Words · ਪਿਆਰ</p>
+          <h2 class="title" data-reveal="up" data-delay="80">Clients <em>&amp; Brides</em></h2>
+        </div>
+
+        <div class="t-slider" id="tSlider" data-reveal="up" data-delay="120">
+          <div class="t-track" id="tTrack">
+            <figure class="t-slide">
+              <svg class="t-quote" viewBox="0 0 24 24" fill="currentColor"><path d="M10 7H6a3 3 0 0 0-3 3v7h7v-7H6.5A1.5 1.5 0 0 1 8 8.5V7zm11 0h-4a3 3 0 0 0-3 3v7h7v-7h-3.5A1.5 1.5 0 0 1 19 8.5V7z"/></svg>
+              <blockquote>My bridal lehenga was beyond the Pinterest board I walked in with. Fit was so perfect
+                I didn’t need a single pin on the wedding day. <em>Dil khush kar ditta!</em></blockquote>
+              <figcaption><strong>Harleen Kaur</strong><span>Bride · Mohali</span></figcaption>
+            </figure>
+            <figure class="t-slide">
+              <svg class="t-quote" viewBox="0 0 24 24" fill="currentColor"><path d="M10 7H6a3 3 0 0 0-3 3v7h7v-7H6.5A1.5 1.5 0 0 1 8 8.5V7zm11 0h-4a3 3 0 0 0-3 3v7h7v-7h-3.5A1.5 1.5 0 0 1 19 8.5V7z"/></svg>
+              <blockquote>They revived my mother’s 30-year-old phulkari dupatta into a suit I now wear on every
+                festival. Craftsmanship you can feel in every thread.</blockquote>
+              <figcaption><strong>Simran Gill</strong><span>Chandigarh</span></figcaption>
+            </figure>
+            <figure class="t-slide">
+              <svg class="t-quote" viewBox="0 0 24 24" fill="currentColor"><path d="M10 7H6a3 3 0 0 0-3 3v7h7v-7H6.5A1.5 1.5 0 0 1 8 8.5V7zm11 0h-4a3 3 0 0 0-3 3v7h7v-7h-3.5A1.5 1.5 0 0 1 19 8.5V7z"/></svg>
+              <blockquote>Got outfits made for my whole family for my brother’s wedding — five sizes, one deadline,
+                zero stress. <em>Time te fitting, dono perfect.</em></blockquote>
+              <figcaption><strong>Navjot Sandhu</strong><span>Sector 80, Mohali</span></figcaption>
+            </figure>
+            <figure class="t-slide">
+              <svg class="t-quote" viewBox="0 0 24 24" fill="currentColor"><path d="M10 7H6a3 3 0 0 0-3 3v7h7v-7H6.5A1.5 1.5 0 0 1 8 8.5V7zm11 0h-4a3 3 0 0 0-3 3v7h7v-7h-3.5A1.5 1.5 0 0 1 19 8.5V7z"/></svg>
+              <blockquote>The saree-gown they designed for my reception got more compliments than the decor.
+                Modern cut, desi soul — exactly what I asked for.</blockquote>
+              <figcaption><strong>Mehak Arora</strong><span>Kharar</span></figcaption>
+            </figure>
+          </div>
+
+          <div class="t-controls">
+            <button type="button" class="t-arrow" id="tPrev" aria-label="Previous review">←</button>
+            <div class="t-dots" id="tDots" aria-label="Reviews"></div>
+            <button type="button" class="t-arrow" id="tNext" aria-label="Next review">→</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ VISIT + APPOINTMENT ══════════ -->
+    <section class="section visit" id="visit">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow" data-reveal="up">Find Us · ਮਿਲੋ</p>
+          <h2 class="title" data-reveal="up" data-delay="80">Visit the <em>Studio</em></h2>
+        </div>
+
+        <div class="visit-grid">
+          <div class="visit-info" data-reveal="right">
+            <ul class="info-list">
+              <li>
+                <span class="info-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.5-7-11a7 7 0 1 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.6"/></svg></span>
+                <div><strong>Address</strong><p>Libaas Couture Studio, First Floor, Sector 79,<br>Sahibzada Ajit Singh Nagar (Mohali), Punjab 140308</p></div>
+              </li>
+              <li>
+                <span class="info-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span>
+                <div><strong>Hours</strong><p>Mon – Sat · 10:30 AM – 8:00 PM<br>Sunday · by appointment</p></div>
+              </li>
+              <li>
+                <span class="info-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a12 12 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg></span>
+                <div><strong>Call / WhatsApp</strong><p><a href="tel:+919876543210">+91 98765 43210</a></p></div>
+              </li>
+              <li>
+                <span class="info-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r="1.1" fill="currentColor" stroke="none"/></svg></span>
+                <div><strong>Instagram</strong><p><a href="https://www.instagram.com/libaas_couture_studio" target="_blank" rel="noopener">@libaas_couture_studio</a></p></div>
+              </li>
+            </ul>
+
+            <div class="map-frame" data-reveal="up" data-delay="150">
+              <iframe title="Libaas Couture Studio — Sector 79, Mohali on Google Maps"
+                src="https://www.google.com/maps?q=Sector+79,+Sahibzada+Ajit+Singh+Nagar,+Punjab&output=embed"
+                loading="lazy" allowfullscreen></iframe>
+            </div>
+          </div>
+
+          <div class="visit-form" data-reveal="left">
+            <form id="bookingForm" novalidate>
+              <h3>Book an Appointment</h3>
+              <p class="form-note">Tell us about your occasion — we’ll call you back to confirm a slot.</p>
+
+              <div class="field">
+                <label for="fName">Your name</label>
+                <input type="text" id="fName" name="name" placeholder="e.g. Harleen Kaur" required>
+                <span class="field-error">Please enter your name.</span>
+              </div>
+
+              <div class="field">
+                <label for="fPhone">Phone</label>
+                <input type="tel" id="fPhone" name="phone" inputmode="numeric" placeholder="10-digit mobile number" required>
+                <span class="field-error">Please enter a valid 10-digit number.</span>
+              </div>
+
+              <div class="field-row">
+                <div class="field">
+                  <label for="fService">Service</label>
+                  <select id="fService" name="service" required>
+                    <option value="" disabled selected>Select a service</option>
+                    <option>Bridal Couture</option>
+                    <option>Custom Stitching</option>
+                    <option>Hand Embroidery</option>
+                    <option>Dupatta / Odhni Work</option>
+                    <option>Alterations &amp; Restyling</option>
+                    <option>Style Consultation</option>
+                  </select>
+                  <span class="field-error">Please choose a service.</span>
+                </div>
+                <div class="field">
+                  <label for="fDate">Preferred date</label>
+                  <input type="date" id="fDate" name="date">
+                  <span class="field-error"></span>
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="fMsg">Your occasion / idea</label>
+                <textarea id="fMsg" name="message" rows="3" placeholder="e.g. Wedding in November — looking for a pastel lehenga…"></textarea>
+                <span class="field-error"></span>
+              </div>
+
+              <button type="submit" class="btn btn-gold btn-full" data-magnetic>
+                <span class="btn-label">Request Appointment</span>
+              </button>
+              <p class="form-fineprint">No advance needed — appointments are free.</p>
+            </form>
+
+            <div class="form-success" id="formSuccess" aria-live="polite">
+              <svg viewBox="0 0 64 64" class="success-mark">
+                <circle cx="32" cy="32" r="29" fill="none" stroke="currentColor" stroke-width="2.5"/>
+                <path d="M20 33.5 28.5 42 44 25" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <h3>Shukriya! Request received.</h3>
+              <p>We’ll call you within a few hours to confirm your visit.<br><em>Milde haan studio vich! ✦</em></p>
+              <button type="button" class="btn btn-ghost" id="successClose">Book another</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ══════════ FOOTER ══════════ -->
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <a href="#home" class="brand brand-footer">
+          <span class="brand-mark">
+            <img src="assets/logo-original.jpg" alt="">
+          </span>
+          <span class="brand-text">
+            <span class="brand-name">Libaas</span>
+            <span class="brand-sub">Couture Studio</span>
+          </span>
+        </a>
+        <p>Designer Suits · Handwork · Stitching — styled by Harpreet.
+          Sector 79, Mohali · shipping all over India.</p>
+        <p class="gurmukhi footer-gurmukhi">ਲਿਬਾਸ — ਤੁਹਾਡੀ ਕਹਾਣੀ, ਸਾਡੇ ਧਾਗੇ</p>
+      </div>
+
+      <nav class="footer-col" aria-label="Footer — pages">
+        <h4>Explore</h4>
+        <a href="#story">Our Story</a>
+        <a href="#collections">Collections</a>
+        <a href="#lookbook">Lookbook</a>
+        <a href="#reviews">Reviews</a>
+      </nav>
+
+      <nav class="footer-col" aria-label="Footer — services">
+        <h4>Services</h4>
+        <a href="#services">Bridal Couture</a>
+        <a href="#services">Custom Stitching</a>
+        <a href="#services">Hand Embroidery</a>
+        <a href="#services">Alterations</a>
+      </nav>
+
+      <div class="footer-col">
+        <h4>Visit</h4>
+        <a href="#visit">Sector 79, Mohali, Punjab</a>
+        <a href="tel:+919876543210">+91 98765 43210</a>
+        <a href="https://www.instagram.com/libaas_couture_studio" target="_blank" rel="noopener">Instagram</a>
+        <a href="https://www.facebook.com/libaasCoutureStudio" target="_blank" rel="noopener">Facebook</a>
+      </div>
+    </div>
+
+    <div class="container footer-bottom">
+      <p>© <span id="year">2026</span> Libaas Couture Studio · Sector 79, Mohali</p>
+      <p>Crafted with <span class="heart">♥</span> in Punjab</p>
+    </div>
+  </footer>
+
+  <!-- Back to top -->
+  <button type="button" class="to-top" id="toTop" aria-label="Back to top">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+  </button>
+
+  <!-- Lightbox -->
+  <div class="lightbox" id="lightbox" aria-hidden="true">
+    <button type="button" class="lb-close" id="lbClose" aria-label="Close">✕</button>
+    <button type="button" class="lb-arrow lb-prev" id="lbPrev" aria-label="Previous">←</button>
+    <figure class="lb-figure">
+      <img id="lbImg" src="" alt="">
+      <figcaption id="lbCaption"></figcaption>
+    </figure>
+    <button type="button" class="lb-arrow lb-next" id="lbNext" aria-label="Next">→</button>
+  </div>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
