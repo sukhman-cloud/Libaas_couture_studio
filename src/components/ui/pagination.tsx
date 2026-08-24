@@ -8,8 +8,12 @@ import { cn } from "@/lib/utils";
 export interface PaginationProps {
   page: number;
   pageCount: number;
-  /** Build an href for a page (server-driven pagination via links). */
+  /** Build an href for a page (client callers only — functions are not
+   *  serializable, so server components use basePath/params instead). */
   hrefFor?: (page: number) => string;
+  /** Server-friendly link building: base path + params to preserve. */
+  basePath?: string;
+  params?: Record<string, string>;
   /** Or handle changes client-side. */
   onPageChange?: (page: number) => void;
   className?: string;
@@ -35,10 +39,24 @@ export function Pagination({
   page,
   pageCount,
   hrefFor,
+  basePath,
+  params,
   onPageChange,
   className,
 }: PaginationProps) {
   if (pageCount <= 1) return null;
+
+  const buildHref =
+    hrefFor ??
+    (basePath
+      ? (target: number) => {
+          const search = new URLSearchParams(params ?? {});
+          if (target > 1) search.set("page", String(target));
+          else search.delete("page");
+          const query = search.toString();
+          return query ? `${basePath}?${query}` : basePath;
+        }
+      : undefined);
 
   const itemClass = (active: boolean, disabled = false) =>
     cn(
@@ -56,10 +74,10 @@ export function Pagination({
     options?: { active?: boolean; disabled?: boolean },
   ) => {
     const { active = false, disabled = false } = options ?? {};
-    if (hrefFor && !disabled) {
+    if (buildHref && !disabled) {
       return (
         <Link
-          href={hrefFor(target)}
+          href={buildHref(target)}
           aria-label={label}
           aria-current={active ? "page" : undefined}
           className={itemClass(active)}

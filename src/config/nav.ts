@@ -46,6 +46,7 @@ export interface NavGroup {
 export const customerPrimaryNav: NavItem[] = [
   { title: "Home", href: "/", icon: Home, exact: true },
   { title: "Shop", href: "/shop", icon: Store },
+  { title: "Categories", href: "/categories", icon: FolderTree },
   { title: "Collections", href: "/collections", icon: LayoutGrid },
 ];
 

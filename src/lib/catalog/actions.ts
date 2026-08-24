@@ -108,6 +108,11 @@ function revalidateCatalog() {
   revalidatePath("/admin/categories");
   revalidatePath("/admin/collections");
   revalidatePath("/admin");
+  // Customer-facing catalog routes must reflect admin changes immediately.
+  revalidatePath("/shop");
+  revalidatePath("/categories");
+  revalidatePath("/collections");
+  revalidatePath("/products", "layout");
 }
 
 /* ── products ───────────────────────────────────────────────────── */
