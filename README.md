@@ -2,9 +2,9 @@
 
 Boutique application for **Libaas Couture Studio** — customer storefront + admin management, built with Next.js (App Router) + TypeScript + Tailwind CSS v4.
 
-> **Phase 5C (current): Authentication concurrency hardening.** Password changes, resets, deactivation and profile edits now serialize on one key per account and re-read the account inside a transaction, so overlapping requests can no longer lose a session-version bump or revive a deactivated account. No new features — checkout, orders and payments still come later.
+> **Phase 5D (current): PostgreSQL + Prisma database foundation.** The repository layer gained a real PostgreSQL provider (Prisma 6, committed migrations, database-enforced uniqueness and foreign keys) plus a validated JSON→PostgreSQL migration pipeline with an independent verifier and a rollback export. The JSON provider remains the local default; the database is opt-in per environment. No production database is connected yet — see `docs/phase-5d-database.md`.
 >
-> Completed so far: **Phase 1** foundation · **Phase 2** design system + app shells · **Phase 3** customer accounts (auth, addresses, measurements) · **Phase 4A** admin catalog (products, categories, collections, media) · **Phase 4B** customer catalog browsing · **Phase 4C** search, filters and product detail · **Phase 5A** wishlist + cart · **Phase 5B** pre-database hardening · **Phase 5C** account concurrency hardening.
+> Completed so far: **Phase 1** foundation · **Phase 2** design system + app shells · **Phase 3** customer accounts (auth, addresses, measurements) · **Phase 4A** admin catalog (products, categories, collections, media) · **Phase 4B** customer catalog browsing · **Phase 4C** search, filters and product detail · **Phase 5A** wishlist + cart · **Phase 5B** pre-database hardening · **Phase 5C** account concurrency hardening · **Phase 5D** PostgreSQL + Prisma foundation.
 
 ## Run locally (ਲੋਕਲ ਚਲਾਉਣ ਲਈ)
 
@@ -25,6 +25,7 @@ Open http://localhost:3000 (customer) and http://localhost:3000/admin (admin —
 | `npm run start` | Serve the production build |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | TypeScript check |
+| `npm run validate:store` | Read-only JSON store integrity report |
 
 ## Structure
 
@@ -54,7 +55,10 @@ src/
 │   └── ...
 ├── server/
 │   ├── account/           # security.ts — the one seam for account mutations
-│   ├── data/              # repository interfaces + memory & JSON-file providers
+│   ├── data/              # repository interfaces + providers:
+│   │   │                  #   memory, JSON file, postgres (Prisma) —
+│   │   │                  #   catalog-logic.ts holds the SHARED query rules
+│   │   └── postgres/      # Prisma client/mappers/provider (Phase 5D)
 │   ├── email/             # email provider abstraction (console in dev)
 │   └── lock.ts            # in-process keyed mutex + the customer lock key
 ├── types/                 # domain model (entities & workflow statuses)
@@ -66,7 +70,7 @@ src/
 - **Brand/business facts** live in `src/config/site.ts`. Phone, address details and hours are intentionally **empty placeholders** — fill them with real values; do not invent them.
 - **Theme tokens** live in `src/app/globals.css` (`@theme`) — one place to adjust the palette/typography.
 - **Environment** is validated in `src/lib/env.ts`; see `.env.example`.
-- **Data provider** — `DATA_PROVIDER` selects storage: `file` (default; JSON at `.data/dev-store.json`, survives restarts, git-ignored) or `memory` (wiped each restart). A real database replaces this in a later phase, behind the same repository interfaces.
+- **Data provider** — `DATA_PROVIDER` selects storage: `file` (default; JSON at `.data/dev-store.json`, survives restarts, git-ignored), `memory` (wiped each restart), or `postgres` (PostgreSQL via Prisma; requires `DATABASE_URL`). All three implement the same repository interfaces and share one set of catalog query rules (`src/server/data/catalog-logic.ts`), so business logic never knows which one is serving. The database schema lives in `prisma/schema.prisma` with committed migrations; the JSON→PostgreSQL migration runbook is in [`docs/phase-5d-database.md`](docs/phase-5d-database.md).
 - **Data directory** — `DATA_DIR` (optional) moves the JSON store *and* uploaded media somewhere else. Defaults to `.data`. Use it to run a server against an isolated store instead of real customer data.
 - **Customer data** (accounts, addresses, measurements) is stored via these repositories with server-side ownership checks; passwords are scrypt-hashed, sessions are HMAC-signed HttpOnly cookies with version-based invalidation. Customer-owned records reference the owning **User** by `userId` — see the ownership rule in `src/types/domain.ts`.
 - **Transactions** — `repos.transaction(fn)` runs several writes as one unit. The JSON provider commits with a single atomic file replace and rolls back in memory on failure; it is not a database and the difference is documented on the interface.
@@ -112,16 +116,13 @@ each guarantee.
 
 ## Deployment (later)
 
-The project is a standard Next.js app at the repo root, but it is **not ready to deploy yet**. Do not import it into Vercel before the database migration.
+The project is a standard Next.js app at the repo root, but it is **not deployed yet** and no production database is connected. With `DATA_PROVIDER=postgres` the two biggest serverless blockers (JSON store durability; store write lock) are gone; what still assumes one long-lived process:
 
-Four things assume one long-lived process with a writable disk, and all four break on serverless:
+- local media storage (`.data/media`) — uploaded images 404 from any other instance until object storage arrives;
+- login throttling — per-instance counters, so the effective limit multiplies by instance count;
+- the in-process domain locks — correct for one instance; multi-instance needs `SELECT … FOR UPDATE` in the postgres provider (documented in `docs/phase-5d-database.md`).
 
-- the JSON data provider (`.data/dev-store.json`) — ephemeral and per-instance, so every signup would be lost within minutes while appearing to work;
-- local media storage (`.data/media`) — uploaded images 404 from any other instance;
-- the in-process lock (`src/server/lock.ts`) — the only guard against duplicate signups and double-spent reset tokens;
-- login throttling — per-instance counters, so the effective limit multiplies by instance count.
-
-Sessions, server actions, caching and revalidation are already serverless-safe. The full blocker list and the plan to clear it are in [`docs/database-migration-plan.md`](docs/database-migration-plan.md).
+Sessions, server actions, caching and revalidation are already serverless-safe. The full blocker list lives in [`docs/database-migration-plan.md`](docs/database-migration-plan.md); the database decision log in [`docs/phase-5d-database.md`](docs/phase-5d-database.md).
 
 ## Legacy
 

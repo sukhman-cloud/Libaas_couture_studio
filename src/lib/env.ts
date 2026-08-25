@@ -27,7 +27,16 @@ const envSchema = z.object({
   ),
   DATA_PROVIDER: z.preprocess(
     emptyAsUndefined,
-    z.enum(["memory", "file"]).default("file"),
+    z.enum(["memory", "file", "postgres"]).default("file"),
+  ),
+  /**
+   * PostgreSQL connection string — required only when DATA_PROVIDER is
+   * "postgres" (enforced below). Never commit a real value; local
+   * development keeps using the file provider and leaves this unset.
+   */
+  DATABASE_URL: z.preprocess(
+    emptyAsUndefined,
+    z.string().min(1).optional(),
   ),
   /**
    * Base directory for local data (JSON store + uploaded media). Relative
@@ -45,7 +54,19 @@ const envSchema = z.object({
   ),
 });
 
-const parsed = envSchema.safeParse(process.env);
+const guardedSchema = envSchema.superRefine((value, ctx) => {
+  // Selecting the postgres provider without a connection string must fail
+  // at boot with a readable message, not at first query with a Prisma one.
+  if (value.DATA_PROVIDER === "postgres" && !value.DATABASE_URL) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["DATABASE_URL"],
+      message: 'DATA_PROVIDER="postgres" requires DATABASE_URL to be set.',
+    });
+  }
+});
+
+const parsed = guardedSchema.safeParse(process.env);
 
 if (!parsed.success) {
   // Fail fast with a readable message instead of undefined behaviour later.

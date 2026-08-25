@@ -673,6 +673,12 @@ installed and nothing is chosen yet.**
 - [x] Identity operations wrapped in `repos.transaction` (Phase 5C).
 - [x] Account mutations serialized on one key and re-read inside the
       transaction (Phase 5C) — no stale-snapshot writes remain in auth.
+- [x] Prisma schema + committed migrations + PostgreSQL provider behind the
+      same repository interfaces (Phase 5D — `docs/phase-5d-database.md`).
+- [x] JSON→PostgreSQL import + independent verifier + rollback export
+      (Phase 5D; rehearsed against the real store on a local PostgreSQL).
+- [ ] Neon project created and `DATABASE_URL` configured (needs the owner —
+      no credentials existed at Phase 5D time and none were invented).
 - [x] `transaction()` exists on the repository interfaces.
 - [x] Corrupt-store handling fails closed instead of starting empty.
 - [x] `.gitignore` covers every environment file, every local-database file,

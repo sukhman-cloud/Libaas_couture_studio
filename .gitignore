@@ -51,6 +51,8 @@ dev-store.json.*
 *.dump
 *.sql.gz
 store-export-*.json
+# Root-level SQL dumps only — /prisma/migrations/*.sql stays tracked.
+/*.sql
 
 # misc
 .DS_Store
