@@ -9,13 +9,48 @@ next-env.d.ts
 # production
 /build
 
-# env files (never commit secrets)
-.env
-.env.local
-.env.*.local
+# ── secrets ────────────────────────────────────────────────────────
+# Everything .env EXCEPT the committed template. `.env` alone used to
+# leave .env.development / .env.test / .env.production unprotected, and a
+# production database URL in one of those would have been committed.
+.env*
+!.env.example
 
-# local development data store (customer accounts etc.)
+# ── local data (never commit; holds password hashes) ────────────────
+# The JSON store and uploaded media both live here by default.
 /.data/
+
+# DATA_DIR can point the store anywhere, including inside the repo, so the
+# store file is also ignored by NAME at any depth — an anchored directory
+# rule alone would miss `.data-test/`, `data/`, or the repo root.
+# (The server additionally drops a self-ignoring .gitignore into whatever
+# directory DATA_DIR resolves to; this is the belt to that pair of braces.)
+dev-store.json
+dev-store.json.*
+
+# ── local databases ────────────────────────────────────────────────
+# Ignore local database FILES, never schema or migrations — those are
+# source and must stay in version control (see the negations below).
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+/prisma/*.db
+/prisma/*.sqlite
+/prisma/.env
+
+# Explicitly keep everything that describes the schema.
+!/prisma/schema.prisma
+!/prisma/migrations/
+!/prisma/migrations/**
+
+# ── migration scratch ──────────────────────────────────────────────
+# Ad-hoc dumps and exports produced while migrating. Real migration
+# scripts live in /scripts and are committed.
+/migration-tmp/
+*.dump
+*.sql.gz
+store-export-*.json
 
 # misc
 .DS_Store

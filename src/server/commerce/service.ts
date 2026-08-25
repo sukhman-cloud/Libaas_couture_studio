@@ -152,8 +152,8 @@ export function summariseCart(lines: CartLine[]): CartView {
 }
 
 /** The signed-in customer's cart, with products resolved. */
-export async function getCartView(customerId: string): Promise<CartView> {
-  const cart = await getRepositories().carts.getByCustomerId(customerId);
+export async function getCartView(userId: string): Promise<CartView> {
+  const cart = await getRepositories().carts.getByUserId(userId);
   if (!cart || cart.items.length === 0) return EMPTY_CART_VIEW;
 
   const ordered = [...cart.items].sort((a, b) =>
@@ -164,21 +164,21 @@ export async function getCartView(customerId: string): Promise<CartView> {
 }
 
 /** Cheap badge count: total quantity of purchasable lines. */
-export async function getCartCount(customerId: string): Promise<number> {
-  const view = await getCartView(customerId);
+export async function getCartCount(userId: string): Promise<number> {
+  const view = await getCartView(userId);
   return view.totalQuantity;
 }
 
 /** Find or create the customer's single active cart. */
-export async function ensureCart(customerId: string): Promise<Cart> {
+export async function ensureCart(userId: string): Promise<Cart> {
   const repos = getRepositories();
-  const existing = await repos.carts.getByCustomerId(customerId);
+  const existing = await repos.carts.getByUserId(userId);
   if (existing) return existing;
 
   const now = new Date().toISOString();
   return repos.carts.create({
     id: crypto.randomUUID(),
-    customerId,
+    userId,
     items: [],
     createdAt: now,
     updatedAt: now,
@@ -196,10 +196,10 @@ export interface WishlistEntry {
 }
 
 export async function getWishlistEntries(
-  customerId: string,
+  userId: string,
 ): Promise<WishlistEntry[]> {
   const repos = getRepositories();
-  const wishlist = await repos.wishlists.getByCustomerId(customerId);
+  const wishlist = await repos.wishlists.getByUserId(userId);
   if (!wishlist || wishlist.items.length === 0) return [];
 
   const categories = await repos.categories.list();
@@ -243,28 +243,28 @@ export async function getWishlistEntries(
 }
 
 /** Badge count: wishlisted products, including any now unavailable. */
-export async function getWishlistCount(customerId: string): Promise<number> {
-  const wishlist = await getRepositories().wishlists.getByCustomerId(customerId);
+export async function getWishlistCount(userId: string): Promise<number> {
+  const wishlist = await getRepositories().wishlists.getByUserId(userId);
   return wishlist?.items.length ?? 0;
 }
 
 export async function isWishlisted(
-  customerId: string,
+  userId: string,
   productId: string,
 ): Promise<boolean> {
-  const wishlist = await getRepositories().wishlists.getByCustomerId(customerId);
+  const wishlist = await getRepositories().wishlists.getByUserId(userId);
   return Boolean(wishlist?.items.some((item) => item.productId === productId));
 }
 
-export async function ensureWishlist(customerId: string): Promise<Wishlist> {
+export async function ensureWishlist(userId: string): Promise<Wishlist> {
   const repos = getRepositories();
-  const existing = await repos.wishlists.getByCustomerId(customerId);
+  const existing = await repos.wishlists.getByUserId(userId);
   if (existing) return existing;
 
   const now = new Date().toISOString();
   return repos.wishlists.create({
     id: crypto.randomUUID(),
-    customerId,
+    userId,
     items: [],
     createdAt: now,
     updatedAt: now,

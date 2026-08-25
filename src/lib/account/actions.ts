@@ -11,8 +11,9 @@ import {
   parseMeasurementValues,
   profileSchema,
 } from "@/lib/validation/customer";
+import { mutateAccount } from "@/server/account/security";
 import { getRepositories } from "@/server/data";
-import { withLock } from "@/server/lock";
+import { customerLockKey, withLock } from "@/server/lock";
 import type { CustomerAddress, MeasurementProfile } from "@/types/domain";
 
 /**
@@ -93,19 +94,33 @@ export async function updateProfile(
     };
   }
 
-  return withLock(`customer:${user.id}`, async () => {
-    const repos = getRepositories();
-    await repos.users.update({
-      ...user,
+  // This action writes the User row itself, which is also the row a
+  // deactivation writes — so it must NOT spread the `user` read above.
+  // That object is a snapshot taken before any lock, and a deactivation
+  // landing in between would be silently undone by writing `isActive: true`
+  // back over it. `mutateAccount` hands back the row as it exists now, and
+  // refuses outright once the account is no longer active.
+  const outcome = await mutateAccount(user.id, async (ctx) => {
+    await ctx.tx.users.update({
+      ...ctx.user,
       name: parsed.data.name,
       phone: parsed.data.phone,
       updatedAt: new Date().toISOString(),
     });
-
-    revalidatePath("/account");
-    revalidatePath("/account/profile");
-    return { success: "Profile updated." };
   });
+
+  if (!outcome.ok) {
+    return {
+      error:
+        outcome.reason === "inactive"
+          ? "This account has been deactivated, so it can no longer be edited."
+          : "Your session has ended. Please sign in again.",
+    };
+  }
+
+  revalidatePath("/account");
+  revalidatePath("/account/profile");
+  return { success: "Profile updated." };
 }
 
 export async function updateMarketingPreference(
@@ -115,7 +130,7 @@ export async function updateMarketingPreference(
   if (typeof acceptsMarketing !== "boolean") {
     return { error: "Invalid preference value." };
   }
-  return withLock(`customer:${user.id}`, async () => {
+  return withLock(customerLockKey(user.id), async () => {
     const repos = getRepositories();
     const profile = await repos.customers.getByUserId(user.id);
     if (!profile) return { error: "Profile not found." };
@@ -163,7 +178,7 @@ export async function saveAddress(
 
   const editingId = formData.get("addressId");
 
-  return withLock(`customer:${user.id}`, async () => {
+  return withLock(customerLockKey(user.id), async () => {
     const repos = getRepositories();
     const profile = await repos.customers.getByUserId(user.id);
     if (!profile) return { error: "Profile not found." };
@@ -200,7 +215,7 @@ export async function saveAddress(
 
 export async function deleteAddress(addressId: string): Promise<AccountFormState> {
   const user = await requireCustomer();
-  return withLock(`customer:${user.id}`, async () => {
+  return withLock(customerLockKey(user.id), async () => {
     const repos = getRepositories();
     const profile = await repos.customers.getByUserId(user.id);
     if (!profile) return { error: "Profile not found." };
@@ -230,7 +245,7 @@ export async function setDefaultAddress(
   addressId: string,
 ): Promise<AccountFormState> {
   const user = await requireCustomer();
-  return withLock(`customer:${user.id}`, async () => {
+  return withLock(customerLockKey(user.id), async () => {
     const repos = getRepositories();
     const profile = await repos.customers.getByUserId(user.id);
     if (!profile) return { error: "Profile not found." };
@@ -259,7 +274,7 @@ async function getOwnedMeasurementProfile(
 ): Promise<MeasurementProfile | null> {
   const repos = getRepositories();
   const profile = await repos.measurementProfiles.getById(profileId);
-  if (!profile || profile.customerId !== userId || profile.archivedAt) {
+  if (!profile || profile.userId !== userId || profile.archivedAt) {
     return null;
   }
   return profile;
@@ -295,7 +310,7 @@ export async function saveMeasurementProfile(
   const editingId = formData.get("profileId");
 
   const result = await withLock(
-    `customer:${user.id}`,
+    customerLockKey(user.id),
     async (): Promise<AccountFormState | null> => {
       const repos = getRepositories();
       const now = new Date().toISOString();
@@ -315,12 +330,12 @@ export async function saveMeasurementProfile(
           updatedAt: now,
         });
       } else {
-        const siblings = await repos.measurementProfiles.listByCustomerId(
+        const siblings = await repos.measurementProfiles.listByUserId(
           user.id,
         );
         await repos.measurementProfiles.create({
           id: randomUUID(),
-          customerId: user.id,
+          userId: user.id,
           label: parsed.data.label,
           unit: parsed.data.unit,
           fitPreference: parsed.data.fitPreference,
@@ -345,7 +360,7 @@ export async function archiveMeasurementProfile(
   profileId: string,
 ): Promise<AccountFormState> {
   const user = await requireCustomer();
-  return withLock(`customer:${user.id}`, async () => {
+  return withLock(customerLockKey(user.id), async () => {
     const profile = await getOwnedMeasurementProfile(user.id, profileId);
     if (!profile) return { error: "Measurement profile not found." };
 
@@ -361,7 +376,7 @@ export async function archiveMeasurementProfile(
 
     // Promote another profile to default if the default was archived.
     if (profile.isDefault) {
-      const remaining = await repos.measurementProfiles.listByCustomerId(
+      const remaining = await repos.measurementProfiles.listByUserId(
         user.id,
       );
       if (remaining.length > 0) {
@@ -383,13 +398,13 @@ export async function setDefaultMeasurementProfile(
   profileId: string,
 ): Promise<AccountFormState> {
   const user = await requireCustomer();
-  return withLock(`customer:${user.id}`, async () => {
+  return withLock(customerLockKey(user.id), async () => {
     const target = await getOwnedMeasurementProfile(user.id, profileId);
     if (!target) return { error: "Measurement profile not found." };
 
     const repos = getRepositories();
     const now = new Date().toISOString();
-    const all = await repos.measurementProfiles.listByCustomerId(user.id);
+    const all = await repos.measurementProfiles.listByUserId(user.id);
     for (const profile of all) {
       const shouldBeDefault = profile.id === profileId;
       if (profile.isDefault !== shouldBeDefault) {
@@ -410,7 +425,7 @@ export async function duplicateMeasurementProfile(
   profileId: string,
 ): Promise<AccountFormState> {
   const user = await requireCustomer();
-  return withLock(`customer:${user.id}`, async () => {
+  return withLock(customerLockKey(user.id), async () => {
     const source = await getOwnedMeasurementProfile(user.id, profileId);
     if (!source) return { error: "Measurement profile not found." };
 

@@ -16,7 +16,7 @@ export default async function MeasurementsPage({
   if (!user) redirect("/login?from=/account/measurements");
 
   const { saved } = await searchParams;
-  const profiles = await getRepositories().measurementProfiles.listByCustomerId(
+  const profiles = await getRepositories().measurementProfiles.listByUserId(
     user.id,
   );
 

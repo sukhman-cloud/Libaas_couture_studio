@@ -29,6 +29,16 @@ const envSchema = z.object({
     emptyAsUndefined,
     z.enum(["memory", "file"]).default("file"),
   ),
+  /**
+   * Base directory for local data (JSON store + uploaded media). Relative
+   * paths resolve against the working directory; defaults to `.data`.
+   * Set this to run a server against an isolated store — the corruption
+   * tests rely on it so they can never touch real customer data.
+   */
+  DATA_DIR: z.preprocess(
+    emptyAsUndefined,
+    z.string().min(1).optional(),
+  ),
   NEXT_PUBLIC_SITE_URL: z.preprocess(
     emptyAsUndefined,
     z.string().url().default("http://localhost:3000"),

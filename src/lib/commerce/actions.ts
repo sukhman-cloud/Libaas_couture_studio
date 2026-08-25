@@ -4,7 +4,7 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { getCustomerUser } from "@/lib/auth/customer-session";
 import { getRepositories } from "@/server/data";
-import { withLock } from "@/server/lock";
+import { customerLockKey, withLock } from "@/server/lock";
 import {
   effectivePriceOf,
   ensureCart,
@@ -55,7 +55,7 @@ export async function addToWishlist(slug: string): Promise<CommerceState> {
     return { error: "Missing product." };
   }
 
-  const result = await withLock(`customer:${user.id}`, async (): Promise<CommerceState> => {
+  const result = await withLock(customerLockKey(user.id), async (): Promise<CommerceState> => {
     const repos = getRepositories();
     // Products are addressed by their public slug — internal ids never
     // travel to the browser.
@@ -94,11 +94,11 @@ export async function removeFromWishlist(slug: string): Promise<CommerceState> {
   const user = await getCustomerUser();
   if (!user) return { error: NOT_SIGNED_IN };
 
-  const result = await withLock(`customer:${user.id}`, async (): Promise<CommerceState> => {
+  const result = await withLock(customerLockKey(user.id), async (): Promise<CommerceState> => {
     const repos = getRepositories();
     const product = await repos.products.getBySlug(slug);
     // Ownership: only ever this customer's own wishlist is loaded.
-    const wishlist = await repos.wishlists.getByCustomerId(user.id);
+    const wishlist = await repos.wishlists.getByUserId(user.id);
     if (!wishlist || !product) return { success: "Removed from your wishlist." };
     const productId = product.id;
 
@@ -128,10 +128,10 @@ export async function removeWishlistItem(
   const user = await getCustomerUser();
   if (!user) return { error: NOT_SIGNED_IN };
 
-  const result = await withLock(`customer:${user.id}`, async (): Promise<CommerceState> => {
+  const result = await withLock(customerLockKey(user.id), async (): Promise<CommerceState> => {
     const repos = getRepositories();
     // Ownership: the id is only matched inside this customer's wishlist.
-    const wishlist = await repos.wishlists.getByCustomerId(user.id);
+    const wishlist = await repos.wishlists.getByUserId(user.id);
     if (!wishlist) return { success: "Removed from your wishlist." };
 
     const items = wishlist.items.filter((item) => item.id !== itemId);
@@ -153,9 +153,9 @@ export async function clearWishlist(): Promise<CommerceState> {
   const user = await getCustomerUser();
   if (!user) return { error: NOT_SIGNED_IN };
 
-  const result = await withLock(`customer:${user.id}`, async (): Promise<CommerceState> => {
+  const result = await withLock(customerLockKey(user.id), async (): Promise<CommerceState> => {
     const repos = getRepositories();
-    const wishlist = await repos.wishlists.getByCustomerId(user.id);
+    const wishlist = await repos.wishlists.getByUserId(user.id);
     if (wishlist && wishlist.items.length > 0) {
       await repos.wishlists.update({
         ...wishlist,
@@ -187,7 +187,7 @@ export async function addToCart(
     return { error: `Choose a quantity between 1 and ${MAX_QUANTITY_PER_ITEM}.` };
   }
 
-  const result = await withLock(`customer:${user.id}`, async (): Promise<CommerceState> => {
+  const result = await withLock(customerLockKey(user.id), async (): Promise<CommerceState> => {
     const repos = getRepositories();
     // Addressed by public slug; the internal id stays server-side.
     const product = await repos.products.getBySlug(slug);
@@ -265,9 +265,9 @@ export async function updateCartItemQuantity(
     return { error: `Choose a quantity between 1 and ${MAX_QUANTITY_PER_ITEM}.` };
   }
 
-  const result = await withLock(`customer:${user.id}`, async (): Promise<CommerceState> => {
+  const result = await withLock(customerLockKey(user.id), async (): Promise<CommerceState> => {
     const repos = getRepositories();
-    const cart = await repos.carts.getByCustomerId(user.id);
+    const cart = await repos.carts.getByUserId(user.id);
     // Ownership: the item id is only ever matched inside this customer's
     // own cart, so another customer's line can never be touched.
     if (!cart || !cart.items.some((item) => item.id === itemId)) {
@@ -295,9 +295,9 @@ export async function removeCartItem(itemId: string): Promise<CommerceState> {
   const user = await getCustomerUser();
   if (!user) return { error: NOT_SIGNED_IN };
 
-  const result = await withLock(`customer:${user.id}`, async (): Promise<CommerceState> => {
+  const result = await withLock(customerLockKey(user.id), async (): Promise<CommerceState> => {
     const repos = getRepositories();
-    const cart = await repos.carts.getByCustomerId(user.id);
+    const cart = await repos.carts.getByUserId(user.id);
     if (!cart) return { success: "Removed from your bag." };
 
     const items = cart.items.filter((item) => item.id !== itemId);
@@ -319,9 +319,9 @@ export async function clearCart(): Promise<CommerceState> {
   const user = await getCustomerUser();
   if (!user) return { error: NOT_SIGNED_IN };
 
-  const result = await withLock(`customer:${user.id}`, async (): Promise<CommerceState> => {
+  const result = await withLock(customerLockKey(user.id), async (): Promise<CommerceState> => {
     const repos = getRepositories();
-    const cart = await repos.carts.getByCustomerId(user.id);
+    const cart = await repos.carts.getByUserId(user.id);
     if (cart && cart.items.length > 0) {
       await repos.carts.update({
         ...cart,

@@ -199,6 +199,15 @@ export interface UserRepository {
 export interface CredentialRepository {
   getByUserId(userId: ID): Promise<AuthCredential | null>;
   create(credential: AuthCredential): Promise<AuthCredential>;
+  /**
+   * INVARIANT: `sessionVersion` is monotonic. Every session token carries
+   * the version it was minted with, so lowering the stored version would
+   * revive sessions that a password change, reset or deactivation had
+   * already invalidated. An update that would move it backwards is
+   * REJECTED (throws) — implementations enforce this, callers do not have
+   * to. Rewriting the same version is allowed; that is an ordinary edit
+   * that invalidates nothing.
+   */
   update(credential: AuthCredential): Promise<AuthCredential>;
 }
 
@@ -211,8 +220,8 @@ export interface CustomerProfileRepository {
 }
 
 export interface MeasurementProfileRepository {
-  /** Active (non-archived) profiles for one customer. */
-  listByCustomerId(customerId: ID): Promise<MeasurementProfile[]>;
+  /** Active (non-archived) profiles owned by one user. */
+  listByUserId(userId: ID): Promise<MeasurementProfile[]>;
   getById(id: ID): Promise<MeasurementProfile | null>;
   create(profile: MeasurementProfile): Promise<MeasurementProfile>;
   update(profile: MeasurementProfile): Promise<MeasurementProfile>;
@@ -221,14 +230,14 @@ export interface MeasurementProfileRepository {
 /* ── Customer commerce (Phase 5A) ───────────────────────────────── */
 
 export interface CartRepository {
-  /** The customer's single active cart, if one exists. */
-  getByCustomerId(customerId: ID): Promise<Cart | null>;
+  /** The user's single active cart, if one exists. */
+  getByUserId(userId: ID): Promise<Cart | null>;
   create(cart: Cart): Promise<Cart>;
   update(cart: Cart): Promise<Cart>;
 }
 
 export interface WishlistRepository {
-  getByCustomerId(customerId: ID): Promise<Wishlist | null>;
+  getByUserId(userId: ID): Promise<Wishlist | null>;
   create(wishlist: Wishlist): Promise<Wishlist>;
   update(wishlist: Wishlist): Promise<Wishlist>;
 }
@@ -240,7 +249,11 @@ export interface PasswordResetTokenRepository {
   markUsed(id: ID): Promise<void>;
 }
 
-export interface Repositories {
+/**
+ * The data-access surface. Everything an operation can read or write.
+ * A transaction callback receives exactly this — no nested transactions.
+ */
+export interface StoreRepositories {
   products: ProductRepository;
   categories: CategoryRepository;
   collections: CollectionRepository;
@@ -254,6 +267,40 @@ export interface Repositories {
   passwordResetTokens: PasswordResetTokenRepository;
   carts: CartRepository;
   wishlists: WishlistRepository;
+}
+
+export interface Repositories extends StoreRepositories {
+  /**
+   * Run several writes as one unit: they all land, or none do.
+   *
+   * ```ts
+   * await repos.transaction(async (tx) => {
+   *   const user = await tx.users.create(...);
+   *   await tx.credentials.create(...);   // a failure here undoes the user
+   *   await tx.customers.create(...);
+   * });
+   * ```
+   *
+   * WHAT EACH PROVIDER ACTUALLY GUARANTEES
+   *
+   * The JSON provider is NOT a database and does not pretend to be one.
+   * It gives:
+   *   - atomic commit — the whole transaction is written by a single
+   *     atomic file replace, so the file never holds a half-done operation;
+   *   - rollback — a throw restores the in-memory store to its exact
+   *     pre-transaction contents;
+   *   - serialization — transactions and ordinary writes take the same
+   *     process-wide lock, so no other write interleaves.
+   * It does NOT give: durability across processes, isolation levels,
+   * savepoints, or protection against a second process writing the same
+   * file. Those arrive with PostgreSQL, where this becomes a real BEGIN /
+   * COMMIT / ROLLBACK and the guarantee only strengthens.
+   *
+   * DEADLOCK RULE: never acquire a domain lock (`withLock`) inside a
+   * transaction callback. Locks are always taken domain-first, store-second;
+   * reversing that inside a callback is the one way to build a cycle.
+   */
+  transaction<T>(fn: (tx: StoreRepositories) => Promise<T>): Promise<T>;
 }
 
 // Re-exported so consumers can import entity types from one place.

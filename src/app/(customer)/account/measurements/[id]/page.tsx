@@ -19,7 +19,7 @@ export default async function EditMeasurementPage({
   const profile = await getRepositories().measurementProfiles.getById(id);
 
   // Ownership check: only the owner may even see that this profile exists.
-  if (!profile || profile.customerId !== user.id || profile.archivedAt) {
+  if (!profile || profile.userId !== user.id || profile.archivedAt) {
     notFound();
   }
 

@@ -8,6 +8,15 @@
  * Monetary amounts are integers in paise (₹1 = 100 paise).
  * Dates are ISO-8601 strings so entities stay serializable across
  * server/client boundaries.
+ *
+ * OWNERSHIP RULE
+ * Customer-owned records reference the owning **User** by `userId`, never
+ * `CustomerProfile.id`. Every authorization check compares against
+ * `getCustomerUser().id`, which is a User id, so User is the ownership
+ * anchor. CustomerProfile is a satellite of User holding addresses and
+ * preferences; only `CustomerProfile.addresses` hangs off the profile.
+ * (Store v4 renamed these fields from `customerId`, which held a User id
+ * despite its name.)
  */
 
 // ── Shared ──────────────────────────────────────────────────────────
@@ -282,8 +291,8 @@ export type FitPreference = "fitted" | "regular" | "relaxed";
 
 export interface MeasurementProfile extends Timestamps {
   id: ID;
-  /** Owning customer's user id — every access must verify this. */
-  customerId: ID;
+  /** Owning User id — every access must verify this. */
+  userId: ID;
   label: string; // e.g. "Myself", "Mom" — just a label, nothing more
   unit: MeasurementUnit;
   values: MeasurementValue[];
@@ -302,7 +311,7 @@ export type CustomizationStatus =
 
 export interface CustomizationRequest extends Timestamps {
   id: ID;
-  customerId: ID;
+  userId: ID;
   productId?: ID; // absent for fully custom designs
   measurementProfileId?: ID;
   details: string;
@@ -354,10 +363,10 @@ export interface CartItem {
   updatedAt: ISODateTime;
 }
 
-/** One active cart per customer. */
+/** One active cart per user. */
 export interface Cart extends Timestamps {
   id: ID;
-  customerId: ID;
+  userId: ID;
   items: CartItem[];
 }
 
@@ -367,10 +376,10 @@ export interface WishlistItem {
   createdAt: ISODateTime;
 }
 
-/** One wishlist per customer; a product appears at most once. */
+/** One wishlist per user; a product appears at most once. */
 export interface Wishlist extends Timestamps {
   id: ID;
-  customerId: ID;
+  userId: ID;
   items: WishlistItem[];
 }
 
@@ -405,7 +414,7 @@ export interface OrderItem {
 export interface Order extends Timestamps {
   id: ID;
   orderNumber: string;
-  customerId: ID;
+  userId: ID;
   items: OrderItem[];
   subtotal: Money;
   total: Money;
@@ -435,7 +444,7 @@ export type AppointmentType = "consultation" | "measurement" | "fitting" | "pick
 
 export interface Appointment extends Timestamps {
   id: ID;
-  customerId: ID;
+  userId: ID;
   type: AppointmentType;
   scheduledAt: ISODateTime;
   durationMinutes: number;
@@ -447,7 +456,7 @@ export type AlterationStatus = "requested" | "received" | "in_progress" | "ready
 
 export interface Alteration extends Timestamps {
   id: ID;
-  customerId: ID;
+  userId: ID;
   orderId?: ID; // alterations may reference an existing order
   description: string;
   status: AlterationStatus;
@@ -458,7 +467,7 @@ export interface Alteration extends Timestamps {
 
 export interface Review extends Timestamps {
   id: ID;
-  customerId: ID;
+  userId: ID;
   productId: ID;
   rating: 1 | 2 | 3 | 4 | 5;
   title?: string;

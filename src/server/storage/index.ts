@@ -1,6 +1,7 @@
 import "server-only";
 import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
+import { ensureDataDir, MEDIA_DIR } from "@/server/paths";
 
 /**
  * Media storage abstraction. Product media reference an opaque
@@ -27,11 +28,14 @@ export function assertSafeKey(key: string): void {
   }
 }
 
-const MEDIA_DIR = path.join(process.cwd(), ".data", "media");
-
+// MEDIA_DIR hangs off the same base as the JSON store (see server/paths),
+// so pointing a run at an isolated data directory isolates uploads too.
 const localProvider: StorageProvider = {
   async put(key, data) {
     assertSafeKey(key);
+    // Uploads can be the first thing to create the data directory, so the
+    // git guard has to be established here too, not only by the store.
+    ensureDataDir();
     await mkdir(MEDIA_DIR, { recursive: true });
     await writeFile(path.join(MEDIA_DIR, key), data);
   },

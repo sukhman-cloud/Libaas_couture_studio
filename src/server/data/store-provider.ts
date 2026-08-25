@@ -7,6 +7,7 @@ import type {
   Category,
   Collection,
   CustomerProfile,
+  ID,
   MeasurementProfile,
   MediaAsset,
   Order,
@@ -25,7 +26,9 @@ import {
   type ProductQuery,
   type ProductSort,
   type Repositories,
+  type StoreRepositories,
 } from "@/server/data/repositories";
+import { withLock } from "@/server/lock";
 
 /**
  * Store-backed repositories shared by the memory and file providers.
@@ -34,7 +37,7 @@ import {
  */
 
 /** Bump when the persisted shape changes; add a step to `migrateStore`. */
-export const STORE_VERSION = 3;
+export const STORE_VERSION = 4;
 
 export interface DataStore {
   version: number;
@@ -167,6 +170,33 @@ export function migrateStore(raw: unknown): DataStore | null {
   // emptyStore() supplies the new collections and every existing record
   // (accounts, catalog, media) carries over untouched.
 
+  // v3 → v4: `customerId` renamed to `userId` on carts, wishlists and
+  // measurement profiles. This is a RENAME ONLY — the value was already the
+  // owning User's id, despite the old name. No id is regenerated, no row is
+  // dropped, and a row that somehow carries both keeps `userId`.
+  if (input.version < 4) {
+    const renameOwner = <T extends { userId?: ID; customerId?: ID }>(
+      rows: T[],
+    ): T[] =>
+      rows.map((row) => {
+        if (row.userId !== undefined) return row;
+        const { customerId, ...rest } = row as T & { customerId?: ID };
+        return { ...rest, userId: customerId } as T;
+      });
+
+    store.carts = renameOwner(
+      (input.carts ?? []) as Array<Cart & { customerId?: ID }>,
+    );
+    store.wishlists = renameOwner(
+      (input.wishlists ?? []) as Array<Wishlist & { customerId?: ID }>,
+    );
+    store.measurementProfiles = renameOwner(
+      (input.measurementProfiles ?? []) as Array<
+        MeasurementProfile & { customerId?: ID }
+      >,
+    );
+  }
+
   store.version = STORE_VERSION;
   return store;
 }
@@ -279,15 +309,34 @@ function sortProducts(rows: Product[], sort: ProductSort | undefined) {
   return sorted;
 }
 
-export function createStoreRepositories(
+/**
+ * Every write is serialized on one process-wide key so a transaction can
+ * hold the store steady while it runs. Domain locks (`customer:<id>`,
+ * `catalog`) are always taken FIRST and this one last, which is what keeps
+ * the ordering acyclic — see the deadlock rule on `Repositories.transaction`.
+ */
+const STORE_LOCK = "store:write";
+
+/**
+ * How a mutation reaches the store. Ordinary repositories take the store
+ * lock; repositories handed to a transaction callback do not, because the
+ * transaction already holds it (re-entering would deadlock).
+ */
+type Guard = <T>(task: () => Promise<T>) => Promise<T>;
+
+const lockedGuard: Guard = (task) => withLock(STORE_LOCK, task);
+const passthroughGuard: Guard = (task) => task();
+
+function buildStoreRepositories(
   store: DataStore,
   persist: () => Promise<void>,
-): Repositories {
+  guard: Guard,
+): StoreRepositories {
   /**
    * Persist a mutation, undoing the in-memory change if the write fails —
    * otherwise a failed save would still be visible to the app (and would
-   * become durable on the next unrelated write). A database provider
-   * replaces this with a transaction.
+   * become durable on the next unrelated write). Inside a transaction
+   * `persist` is a no-op, so the whole unit is written once at commit.
    */
   async function persistOrRollback(rollback: () => void): Promise<void> {
     try {
@@ -299,38 +348,54 @@ export function createStoreRepositories(
   }
 
   async function insert<T>(list: T[], item: T): Promise<T> {
-    list.push(item);
-    await persistOrRollback(() => {
-      const index = list.lastIndexOf(item);
-      if (index !== -1) list.splice(index, 1);
+    return guard(async () => {
+      list.push(item);
+      await persistOrRollback(() => {
+        const index = list.lastIndexOf(item);
+        if (index !== -1) list.splice(index, 1);
+      });
+      return item;
     });
-    return item;
   }
 
+  /**
+   * Swap a row for a new version of itself.
+   *
+   * `precondition` runs against the CURRENT row while the store lock is
+   * held, so an invariant it enforces cannot be raced: the check and the
+   * write are one critical section. Throwing from it aborts the write (and,
+   * inside a transaction, rolls the whole unit back).
+   */
   async function replace<T extends { id: string }>(
     list: T[],
     item: T,
     label: string,
+    precondition?: (current: T) => void,
   ): Promise<T> {
-    const index = list.findIndex((row) => row.id === item.id);
-    if (index === -1) throw new Error(`${label} not found: ${item.id}`);
-    const previous = list[index];
-    list[index] = item;
-    await persistOrRollback(() => {
-      list[index] = previous;
+    return guard(async () => {
+      const index = list.findIndex((row) => row.id === item.id);
+      if (index === -1) throw new Error(`${label} not found: ${item.id}`);
+      const previous = list[index];
+      precondition?.(previous);
+      list[index] = item;
+      await persistOrRollback(() => {
+        list[index] = previous;
+      });
+      return item;
     });
-    return item;
   }
 
   async function remove<T extends { id: string }>(
     list: T[],
     id: string,
   ): Promise<void> {
-    const index = list.findIndex((row) => row.id === id);
-    if (index === -1) return;
-    const [removed] = list.splice(index, 1);
-    await persistOrRollback(() => {
-      list.splice(index, 0, removed);
+    return guard(async () => {
+      const index = list.findIndex((row) => row.id === id);
+      if (index === -1) return;
+      const [removed] = list.splice(index, 1);
+      await persistOrRollback(() => {
+        list.splice(index, 0, removed);
+      });
     });
   }
 
@@ -557,7 +622,24 @@ export function createStoreRepositories(
         return insert(store.credentials, credential);
       },
       async update(credential) {
-        return replace(store.credentials, credential, "Credential");
+        // sessionVersion is monotonic BY DEFINITION: it only ever counts up,
+        // and every session token carries the version it was minted with.
+        // Writing a lower one would silently revalidate sessions that a
+        // password change, reset or deactivation had already killed, so it
+        // is rejected at the storage seam rather than trusted to every
+        // caller — present and future — getting the arithmetic right.
+        return replace(
+          store.credentials,
+          credential,
+          "Credential",
+          (current) => {
+            if (credential.sessionVersion < current.sessionVersion) {
+              throw new Error(
+                `Credential ${credential.id}: sessionVersion cannot move backwards (${current.sessionVersion} -> ${credential.sessionVersion}).`,
+              );
+            }
+          },
+        );
       },
     },
 
@@ -582,9 +664,9 @@ export function createStoreRepositories(
     },
 
     measurementProfiles: {
-      async listByCustomerId(customerId) {
+      async listByUserId(userId) {
         return store.measurementProfiles.filter(
-          (m) => m.customerId === customerId && !m.archivedAt,
+          (m) => m.userId === userId && !m.archivedAt,
         );
       },
       async getById(id) {
@@ -599,8 +681,8 @@ export function createStoreRepositories(
     },
 
     carts: {
-      async getByCustomerId(customerId) {
-        return store.carts.find((c) => c.customerId === customerId) ?? null;
+      async getByUserId(userId) {
+        return store.carts.find((c) => c.userId === userId) ?? null;
       },
       async create(cart) {
         return insert(store.carts, cart);
@@ -611,8 +693,8 @@ export function createStoreRepositories(
     },
 
     wishlists: {
-      async getByCustomerId(customerId) {
-        return store.wishlists.find((w) => w.customerId === customerId) ?? null;
+      async getByUserId(userId) {
+        return store.wishlists.find((w) => w.userId === userId) ?? null;
       },
       async create(wishlist) {
         return insert(store.wishlists, wishlist);
@@ -638,14 +720,85 @@ export function createStoreRepositories(
         );
       },
       async markUsed(id) {
-        const token = store.passwordResetTokens.find((t) => t.id === id);
-        if (!token) return;
-        const previous = token.usedAt;
-        token.usedAt = new Date().toISOString();
-        await persistOrRollback(() => {
-          token.usedAt = previous;
+        return guard(async () => {
+          const token = store.passwordResetTokens.find((t) => t.id === id);
+          if (!token) return;
+          const previous = token.usedAt;
+          token.usedAt = new Date().toISOString();
+          await persistOrRollback(() => {
+            token.usedAt = previous;
+          });
         });
       },
     },
   };
+}
+
+/** Deep copy of every collection, used as the transaction rollback point. */
+function snapshotStore(store: DataStore): DataStore {
+  return structuredClone(store);
+}
+
+/**
+ * Restore a snapshot IN PLACE. The store object itself must survive, because
+ * the file provider's `persist` closure captures that exact reference —
+ * swapping in a fresh object would leave it writing a stale store.
+ */
+function restoreStore(store: DataStore, snapshot: DataStore): void {
+  store.version = snapshot.version;
+  for (const key of STORE_COLLECTION_KEYS) {
+    const live = store[key] as unknown[];
+    live.length = 0;
+    live.push(...(snapshot[key] as unknown[]));
+  }
+}
+
+export function createStoreRepositories(
+  store: DataStore,
+  persist: () => Promise<void>,
+): Repositories {
+  const base = buildStoreRepositories(store, persist, lockedGuard);
+
+  async function transaction<T>(
+    fn: (tx: StoreRepositories) => Promise<T>,
+  ): Promise<T> {
+    return withLock(STORE_LOCK, async () => {
+      const snapshot = snapshotStore(store);
+
+      // Inside the unit, writes mutate the store but never touch the disk;
+      // one commit at the end turns the whole thing into a single atomic
+      // file replace.
+      let dirty = false;
+      const buffered = buildStoreRepositories(
+        store,
+        async () => {
+          dirty = true;
+        },
+        passthroughGuard,
+      );
+
+      let result: T;
+      try {
+        result = await fn(buffered);
+      } catch (error) {
+        restoreStore(store, snapshot);
+        throw error;
+      }
+
+      if (dirty) {
+        try {
+          await persist();
+        } catch (error) {
+          // The commit failed, so nothing reached the disk. Undo the
+          // in-memory changes too, or they would become durable on the
+          // next unrelated write.
+          restoreStore(store, snapshot);
+          throw error;
+        }
+      }
+      return result;
+    });
+  }
+
+  return { ...base, transaction };
 }

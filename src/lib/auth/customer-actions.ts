@@ -18,6 +18,10 @@ import {
   resetPasswordSchema,
   signupSchema,
 } from "@/lib/validation/customer";
+import {
+  mutateAccount,
+  rotateSession,
+} from "@/server/account/security";
 import { getRepositories } from "@/server/data";
 import { getEmailProvider } from "@/server/email";
 import { withLock } from "@/server/lock";
@@ -134,61 +138,68 @@ export async function signupCustomer(
     return { fieldErrors: fieldErrorsFrom(parsed.error.issues), values: echoed };
   }
 
+  // Hash before taking any lock — scrypt is ~100 ms of pure CPU that depends
+  // on nothing stored, so there is no reason to hold a lock through it.
+  const passwordHash = hashPassword(parsed.data.password);
+
   // Lock by email so two concurrent signups can't both pass the duplicate
-  // check and create two accounts for the same address.
+  // check and create two accounts for the same address. Inside it, the
+  // duplicate check and all three inserts run as ONE transaction: an account
+  // can never exist without its credential (unable to sign in, unable to
+  // reset — a permanently broken row) or without its customer profile.
   const created = await withLock(
     `signup:${parsed.data.email}`,
     async (): Promise<
       { error: AuthFormState } | { userId: string; sessionVersion: number }
-    > => {
-      const repos = getRepositories();
-      const existing = await repos.users.findByEmail(parsed.data.email);
-      if (existing) {
-        return {
-          error: {
-            fieldErrors: {
-              email:
-                "This email is already registered — try signing in instead.",
+    > =>
+      getRepositories().transaction(async (tx) => {
+        const existing = await tx.users.findByEmail(parsed.data.email);
+        if (existing) {
+          return {
+            error: {
+              fieldErrors: {
+                email:
+                  "This email is already registered — try signing in instead.",
+              },
+              values: echoed,
             },
-            values: echoed,
-          },
+          };
+        }
+
+        const now = new Date().toISOString();
+        const user: User = {
+          id: randomUUID(),
+          kind: "customer",
+          name: parsed.data.name,
+          email: parsed.data.email,
+          phone: parsed.data.phone,
+          isActive: true,
+          createdAt: now,
+          updatedAt: now,
         };
-      }
+        const credential: AuthCredential = {
+          id: randomUUID(),
+          userId: user.id,
+          passwordHash,
+          sessionVersion: 1,
+          createdAt: now,
+          updatedAt: now,
+        };
+        const profile: CustomerProfile = {
+          id: randomUUID(),
+          userId: user.id,
+          addresses: [],
+          acceptsMarketing: false,
+          createdAt: now,
+          updatedAt: now,
+        };
 
-      const now = new Date().toISOString();
-      const user: User = {
-        id: randomUUID(),
-        kind: "customer",
-        name: parsed.data.name,
-        email: parsed.data.email,
-        phone: parsed.data.phone,
-        isActive: true,
-        createdAt: now,
-        updatedAt: now,
-      };
-      const credential: AuthCredential = {
-        id: randomUUID(),
-        userId: user.id,
-        passwordHash: hashPassword(parsed.data.password),
-        sessionVersion: 1,
-        createdAt: now,
-        updatedAt: now,
-      };
-      const profile: CustomerProfile = {
-        id: randomUUID(),
-        userId: user.id,
-        addresses: [],
-        acceptsMarketing: false,
-        createdAt: now,
-        updatedAt: now,
-      };
+        await tx.users.create(user);
+        await tx.credentials.create(credential);
+        await tx.customers.create(profile);
 
-      await repos.users.create(user);
-      await repos.credentials.create(credential);
-      await repos.customers.create(profile);
-
-      return { userId: user.id, sessionVersion: credential.sessionVersion };
-    },
+        return { userId: user.id, sessionVersion: credential.sessionVersion };
+      }),
   );
 
   if ("error" in created) return created.error;
@@ -343,40 +354,45 @@ export async function resetPassword(
     .update(parsed.data.token)
     .digest("hex");
 
-  // Lock by token hash so the find→burn→rotate sequence is atomic: a
-  // concurrent double-submit can't use the same single-use token twice.
-  const result = await withLock(
-    `reset:${tokenHash}`,
-    async (): Promise<AuthFormState | null> => {
-      const repos = getRepositories();
-      const resetToken =
-        await repos.passwordResetTokens.findValidByHash(tokenHash);
-      if (!resetToken) {
-        return {
-          error:
-            "This reset link is invalid or has expired. Request a new one from the forgot-password page.",
-        };
-      }
+  // ONE message for every failure below — expired, already used, unknown,
+  // or account deactivated since the link was sent. Distinguishing them
+  // would turn a reset link into an account-status oracle.
+  const INVALID_LINK: AuthFormState = {
+    error:
+      "This reset link is invalid or has expired. Request a new one from the forgot-password page.",
+  };
 
-      const credential = await repos.credentials.getByUserId(
-        resetToken.userId,
-      );
-      if (!credential) {
-        return { error: "This reset link is no longer valid." };
-      }
+  // Resolve the token's owner first so the mutation can serialize on the
+  // ACCOUNT rather than on the token: a reset and a signed-in password
+  // change write the same credential row, and the old token-hash lock did
+  // not exclude them from each other. This lookup is advisory only — the
+  // authoritative single-use check re-runs inside the transaction below,
+  // where nothing can burn the token underneath it.
+  const claimed = await getRepositories().passwordResetTokens.findValidByHash(
+    tokenHash,
+  );
+  if (!claimed) return INVALID_LINK;
 
-      // Single use: burn the token first, then rotate the credential.
-      await repos.passwordResetTokens.markUsed(resetToken.id);
-      await repos.credentials.update({
-        ...credential,
-        passwordHash: hashPassword(parsed.data.password),
-        sessionVersion: credential.sessionVersion + 1, // invalidate old sessions
-        updatedAt: new Date().toISOString(),
-      });
-      return null; // success
+  // Hash outside the lock; it depends on nothing stored.
+  const passwordHash = hashPassword(parsed.data.password);
+
+  const outcome = await mutateAccount(
+    claimed.userId,
+    async (ctx): Promise<"reset" | "spent"> => {
+      const token = await ctx.tx.passwordResetTokens.findValidByHash(tokenHash);
+      if (!token) return "spent";
+
+      // Burn the token and rotate the credential as one unit: the token can
+      // never be consumed without the password actually changing, and the
+      // password can never change without the token being consumed.
+      await ctx.tx.passwordResetTokens.markUsed(token.id);
+      await rotateSession(ctx, { passwordHash });
+      return "reset";
     },
   );
-  if (result) return result;
+
+  // A deactivated or missing account fails exactly like a bad token.
+  if (!outcome.ok || outcome.value === "spent") return INVALID_LINK;
 
   return {
     success: "Your password has been reset. You can now sign in.",
@@ -401,24 +417,41 @@ export async function changePassword(
     return { fieldErrors: fieldErrorsFrom(parsed.error.issues) };
   }
 
-  const repos = getRepositories();
-  const credential = await repos.credentials.getByUserId(user.id);
-  if (
-    !credential ||
-    !verifyPassword(parsed.data.currentPassword, credential.passwordHash)
-  ) {
+  // Hash the new password before taking the lock — scrypt is ~100 ms of pure
+  // CPU that depends on nothing stored, so it does not belong in the critical
+  // section. VERIFYING the current one does, and stays inside.
+  const passwordHash = hashPassword(parsed.data.newPassword);
+
+  const outcome = await mutateAccount(
+    user.id,
+    async (ctx): Promise<{ sessionVersion: number } | "wrong_password"> => {
+      // Checked against the credential THIS transaction read, never one
+      // fetched before the lock. Two overlapping changes therefore resolve
+      // deterministically: the first commits, and the second is verified
+      // against the password the first just set — so exactly one succeeds
+      // and the stored credential is never a mixture of the two.
+      if (
+        !verifyPassword(parsed.data.currentPassword, ctx.credential.passwordHash)
+      ) {
+        return "wrong_password";
+      }
+      return { sessionVersion: await rotateSession(ctx, { passwordHash }) };
+    },
+  );
+
+  if (!outcome.ok) {
+    return { error: "Your session has ended. Please sign in again." };
+  }
+  if (outcome.value === "wrong_password") {
     return { fieldErrors: { currentPassword: "Current password is incorrect." } };
   }
 
-  const updated = await repos.credentials.update({
-    ...credential,
-    passwordHash: hashPassword(parsed.data.newPassword),
-    sessionVersion: credential.sessionVersion + 1,
-    updatedAt: new Date().toISOString(),
-  });
-
-  // Re-mint this session so the current device stays signed in.
-  const token = createCustomerSessionToken(user.id, updated.sessionVersion);
+  // Re-mint this session so the current device stays signed in. Every other
+  // device now holds a token one version behind, and is signed out.
+  const token = createCustomerSessionToken(
+    user.id,
+    outcome.value.sessionVersion,
+  );
   if (token) await setCustomerCookie(token);
 
   return { success: "Password updated. Other signed-in devices were signed out." };
@@ -438,25 +471,40 @@ export async function deactivateAccount(
     return { fieldErrors: { password: "Enter your password to confirm." } };
   }
 
-  const repos = getRepositories();
-  const credential = await repos.credentials.getByUserId(user.id);
-  if (!credential || !verifyPassword(password, credential.passwordHash)) {
+  const outcome = await mutateAccount(
+    user.id,
+    async (ctx): Promise<"deactivated" | "wrong_password"> => {
+      if (!verifyPassword(password, ctx.credential.passwordHash)) {
+        return "wrong_password";
+      }
+
+      // Soft deactivation — records are preserved for future business needs
+      // (orders, alterations); sessions are invalidated via the version bump.
+      // Both writes land in ONE transaction, so the account can never come
+      // to rest deactivated-with-live-sessions or signed-out-but-active.
+      // `ctx.user` is the row as it exists now, so this cannot revert a
+      // profile edit that committed while the password was being verified.
+      await ctx.tx.users.update({
+        ...ctx.user,
+        isActive: false,
+        updatedAt: new Date().toISOString(),
+      });
+      await rotateSession(ctx);
+      return "deactivated";
+    },
+    // Stay idempotent: a repeat submit — or a deactivation that landed from
+    // another device meanwhile — still signs this device out rather than
+    // reporting an error for work that is already done.
+    { requireActive: false },
+  );
+
+  if (outcome.ok && outcome.value === "wrong_password") {
     return { fieldErrors: { password: "Password is incorrect." } };
   }
 
-  // Soft deactivation — records are preserved for future business needs
-  // (orders, alterations); sessions are invalidated via the version bump.
-  await repos.users.update({
-    ...user,
-    isActive: false,
-    updatedAt: new Date().toISOString(),
-  });
-  await repos.credentials.update({
-    ...credential,
-    sessionVersion: credential.sessionVersion + 1,
-    updatedAt: new Date().toISOString(),
-  });
-
+  // Success and "the account is already gone" end the same way. `redirect`
+  // throws, so it must stay outside the transaction — inside, it would look
+  // like a failure and roll the deactivation back.
   const store = await cookies();
   store.delete(CUSTOMER_SESSION_COOKIE);
   redirect("/");

@@ -27,7 +27,7 @@ export default async function AccountPage() {
   const repos = getRepositories();
   const [profile, measurements] = await Promise.all([
     repos.customers.getByUserId(user.id),
-    repos.measurementProfiles.listByCustomerId(user.id),
+    repos.measurementProfiles.listByUserId(user.id),
   ]);
   const addresses = profile?.addresses ?? [];
   const defaultAddress = addresses.find(
