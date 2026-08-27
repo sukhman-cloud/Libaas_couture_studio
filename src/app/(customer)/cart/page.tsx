@@ -193,8 +193,14 @@ export default async function CartPage() {
                   </div>
                   <Text tone="muted" size="sm">
                     Delivery and any stitching charges are confirmed with the
-                    studio. Online checkout is coming soon.
+                    studio.
                   </Text>
+                  <Link
+                    href="/checkout"
+                    className={buttonStyles({ className: "w-full" })}
+                  >
+                    Proceed to checkout
+                  </Link>
                   <Link
                     href="/shop"
                     className={buttonStyles({

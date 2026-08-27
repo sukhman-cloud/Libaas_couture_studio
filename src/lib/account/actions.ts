@@ -28,6 +28,9 @@ export interface AccountFormState {
   success?: string;
   /** Echo of submitted values so errors don't clear the form. */
   values?: Record<string, string>;
+  /** Id of the address a successful saveAddress created/updated — lets
+   *  checkout select the just-added address (Phase 6A). */
+  addressId?: string;
 }
 
 function echoValues(formData: FormData, keys: string[]): Record<string, string> {
@@ -185,6 +188,7 @@ export async function saveAddress(
 
     const now = new Date().toISOString();
 
+    let savedId: string;
     if (typeof editingId === "string" && editingId) {
       // Ownership: the id must exist inside THIS customer's profile.
       const index = profile.addresses.findIndex((a) => a.id === editingId);
@@ -196,6 +200,7 @@ export async function saveAddress(
       const addresses = [...profile.addresses];
       addresses[index] = updated;
       await repos.customers.update({ ...profile, addresses, updatedAt: now });
+      savedId = updated.id;
     } else {
       const address: CustomerAddress = { id: randomUUID(), ...parsed.data };
       await repos.customers.update({
@@ -205,11 +210,12 @@ export async function saveAddress(
         defaultAddressId: profile.defaultAddressId ?? address.id,
         updatedAt: now,
       });
+      savedId = address.id;
     }
 
     revalidatePath("/account/addresses");
     revalidatePath("/account");
-    return { success: "Address saved." };
+    return { success: "Address saved.", addressId: savedId };
   });
 }
 

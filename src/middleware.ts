@@ -25,8 +25,10 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Customer account area
-  if (pathname.startsWith("/account")) {
+  // Customer account area + checkout (Phase 6A) — both belong to a
+  // signed-in customer. Cryptographic verification still happens
+  // server-side in the layouts/pages; this is the fast UX redirect.
+  if (pathname.startsWith("/account") || pathname.startsWith("/checkout")) {
     if (!request.cookies.has(CUSTOMER_SESSION_COOKIE)) {
       const loginUrl = new URL("/login", request.url);
       loginUrl.searchParams.set("from", pathname);
@@ -39,5 +41,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/account/:path*"],
+  matcher: ["/admin/:path*", "/account/:path*", "/checkout/:path*"],
 };

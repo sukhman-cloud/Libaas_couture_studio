@@ -29,15 +29,26 @@ const labelTitles: Record<CustomerAddress["label"], string> = {
   other: "Other",
 };
 
-function AddressForm({
+/**
+ * The ONE address form — reused by the account page and (Phase 6A) by
+ * checkout, which passes its own wrapper around the same saveAddress
+ * action so the checkout route refreshes too. There is no second address
+ * implementation anywhere.
+ */
+export function AddressForm({
   address,
   onDone,
+  action = saveAddress,
 }: {
   address: CustomerAddress | null;
   onDone: () => void;
+  action?: (
+    prev: AccountFormState,
+    formData: FormData,
+  ) => Promise<AccountFormState>;
 }) {
   const [state, formAction, isPending] = useActionState(
-    saveAddress,
+    action,
     initialState,
   );
   const { toast } = useToast();

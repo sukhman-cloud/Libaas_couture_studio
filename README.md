@@ -2,9 +2,9 @@
 
 Boutique application for **Libaas Couture Studio** — customer storefront + admin management, built with Next.js (App Router) + TypeScript + Tailwind CSS v4.
 
-> **Phase 5D (current): PostgreSQL + Prisma database foundation.** The repository layer gained a real PostgreSQL provider (Prisma 6, committed migrations, database-enforced uniqueness and foreign keys) plus a validated JSON→PostgreSQL migration pipeline with an independent verifier and a rollback export. The JSON provider remains the local default; the database is opt-in per environment. No production database is connected yet — see `docs/phase-5d-database.md`.
+> **Phase 6A (current): Checkout foundation.** `/checkout` reviews the bag, the customer's details and the delivery address — all validated server-side by one checkout service (cart ownership, availability, price-snapshot changes with explicit acknowledgement, address ownership). The final confirmation deliberately creates **no order**: Phase 6B adds the Order model and its creation transaction on top of this exact view. No shipping rates, taxes or discounts are invented — the summary shows only what the application truly knows.
 >
-> Completed so far: **Phase 1** foundation · **Phase 2** design system + app shells · **Phase 3** customer accounts (auth, addresses, measurements) · **Phase 4A** admin catalog (products, categories, collections, media) · **Phase 4B** customer catalog browsing · **Phase 4C** search, filters and product detail · **Phase 5A** wishlist + cart · **Phase 5B** pre-database hardening · **Phase 5C** account concurrency hardening · **Phase 5D** PostgreSQL + Prisma foundation.
+> Completed so far: **Phase 1** foundation · **Phase 2** design system + app shells · **Phase 3** customer accounts (auth, addresses, measurements) · **Phase 4A** admin catalog (products, categories, collections, media) · **Phase 4B** customer catalog browsing · **Phase 4C** search, filters and product detail · **Phase 5A** wishlist + cart · **Phase 5B** pre-database hardening · **Phase 5C** account concurrency hardening · **Phase 5D** PostgreSQL + Prisma foundation · **Phase 6A** checkout foundation.
 
 ## Run locally (ਲੋਕਲ ਚਲਾਉਣ ਲਈ)
 
@@ -33,7 +33,7 @@ Open http://localhost:3000 (customer) and http://localhost:3000/admin (admin —
 src/
 ├── app/
 │   ├── (customer)/        # /, /shop, /categories, /collections, /products,
-│   │   │                  #   /search, /cart, /wishlist
+│   │   │                  #   /search, /cart, /wishlist, /checkout
 │   │   ├── login, signup, forgot-password, reset-password   # auth pages
 │   │   └── account/       # /account/** — session-verified (profile,
 │   │                      #   addresses, measurements, settings)
@@ -55,6 +55,7 @@ src/
 │   └── ...
 ├── server/
 │   ├── account/           # security.ts — the one seam for account mutations
+│   ├── checkout/          # service.ts — checkout view model + readiness (Phase 6A)
 │   ├── data/              # repository interfaces + providers:
 │   │   │                  #   memory, JSON file, postgres (Prisma) —
 │   │   │                  #   catalog-logic.ts holds the SHARED query rules

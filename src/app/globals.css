@@ -30,8 +30,8 @@
   --color-gold-300: #dcc08a;
   --color-gold-400: #d1af6e;
   --color-gold-500: #c6a15b;
-  --color-gold-600: #a9823f;
-  --color-gold-700: #8a6a33;
+  --color-gold-600: #86652e; /* ≥4.5:1 on cream (a11y, Phase 6A) */
+  --color-gold-700: #77592a; /* ≥4.5:1 on gold tint (a11y, Phase 6A) */
 
   /* Surfaces — warm ivory */
   --color-cream-50: #faf6ef;
@@ -43,8 +43,8 @@
   --color-muted: #6e6b64;
 
   /* Status */
-  --color-success: #2f7d4f;
-  --color-warning: #a97b1f;
+  --color-success: #276b43; /* ≥4.5:1 on success tint (a11y, Phase 6A) */
+  --color-warning: #815d17; /* ≥4.5:1 on warning tint (a11y, Phase 6A) */
   --color-danger: #b03030;
 
   /*

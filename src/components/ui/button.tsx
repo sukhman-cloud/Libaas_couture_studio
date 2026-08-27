@@ -16,7 +16,10 @@ const variantClasses: Record<Variant, string> = {
   primary:
     "bg-navy-700 text-cream-50 hover:bg-navy-800 active:bg-navy-900 shadow-sm",
   secondary:
-    "bg-gold-500 text-navy-900 hover:bg-gold-600 active:bg-gold-700 shadow-sm",
+    // Hover lightens rather than darkens: navy text keeps ≥7:1 contrast on
+    // gold-400/500, while the darkened gold-600/700 (a11y tokens, Phase 6A)
+    // would drop it below 4.5:1.
+    "bg-gold-500 text-navy-900 hover:bg-gold-400 active:bg-gold-500 shadow-sm",
   outline:
     "border border-navy-300 text-navy-700 hover:bg-navy-50 active:bg-navy-100",
   ghost: "text-navy-700 hover:bg-navy-50 active:bg-navy-100",
