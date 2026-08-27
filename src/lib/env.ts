@@ -52,6 +52,28 @@ const envSchema = z.object({
     emptyAsUndefined,
     z.string().url().default("http://localhost:3000"),
   ),
+  /**
+   * Instagram feed configuration (Phase 6B) — OPTIONAL, and deliberately
+   * validated LENIENTLY here: these power a decorative section, so a typo
+   * must only disable the section with a warning (the instagram service
+   * does the strict checks), never stop the whole site from booting the
+   * way the critical variables above rightly do. Token is server-side
+   * only; never reaches the browser. See docs/phase-6b-instagram.md.
+   */
+  INSTAGRAM_ACCESS_TOKEN: z.preprocess(
+    emptyAsUndefined,
+    z.string().optional(),
+  ),
+  /** Instagram user id; defaults to "me" (the token's owner). */
+  INSTAGRAM_USER_ID: z.preprocess(
+    emptyAsUndefined,
+    z.string().optional(),
+  ),
+  /** Graph API base override — exists ONLY for tests against a mock. */
+  INSTAGRAM_GRAPH_API_BASE_URL: z.preprocess(
+    emptyAsUndefined,
+    z.string().optional(),
+  ),
 });
 
 const guardedSchema = envSchema.superRefine((value, ctx) => {

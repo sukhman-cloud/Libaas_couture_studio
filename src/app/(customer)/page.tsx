@@ -1,6 +1,8 @@
+import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { CalendarDays, Ruler, Scissors, Sparkles } from "lucide-react";
+import { InstagramFeed } from "@/components/social/instagram-feed";
 import { Badge } from "@/components/ui/badge";
 import { buttonStyles } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -118,23 +120,39 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Social ───────────────────────────────────────────── */}
-      <section className="border-t border-cream-200 bg-cream-100">
-        <div className="container-page flex flex-col items-center gap-4 py-12 text-center">
-          <h2 className="font-display text-xl font-semibold text-navy-800">
-            Follow the studio
+      {/* ── Social / Instagram (Phase 6B) ────────────────────── */}
+      <section
+        aria-labelledby="home-instagram"
+        className="border-t border-cream-200 bg-cream-100"
+      >
+        <div className="container-page flex flex-col items-center py-14 text-center sm:py-20">
+          <h2
+            id="home-instagram"
+            className="font-display text-2xl font-semibold text-navy-800 sm:text-3xl"
+          >
+            From the studio&apos;s Instagram
           </h2>
-          <p className="max-w-md text-sm text-muted">
-            New work, handwork close-ups and studio updates.
+          <p className="mt-2 max-w-md text-sm text-muted">
+            New work, handwork close-ups and studio updates — straight from
+            our feed.
           </p>
           <Link
             href={siteConfig.social.instagram}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm font-medium text-gold-700 underline-offset-4 hover:underline"
+            className="mt-3 inline-flex min-h-11 items-center text-sm font-medium text-gold-700 underline underline-offset-4"
           >
             @libaas_couture_studio →
           </Link>
+
+          {/* Renders the live feed when configured; renders nothing (and
+              the section stays a simple follow invitation) when the
+              integration is off or Instagram is unreachable. Suspense
+              streams the rest of the page immediately — even a hanging
+              API (8s timeout) can never delay first paint. */}
+          <Suspense fallback={null}>
+            <InstagramFeed />
+          </Suspense>
         </div>
       </section>
     </>
