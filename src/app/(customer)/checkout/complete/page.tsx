@@ -79,11 +79,19 @@ export default async function OrderPlacedPage({
                     >
                       <span className="min-w-0">
                         {item.name} × {item.quantity}
-                        {item.hasConfiguration && (
+                        {item.stitched ? (
+                          <span className="ml-2 text-xs text-muted">
+                            (Stitched
+                            {item.measurementProfileLabel
+                              ? ` — ${item.measurementProfileLabel}`
+                              : ""}
+                            )
+                          </span>
+                        ) : item.hasConfiguration ? (
                           <span className="ml-2 text-xs text-muted">
                             (custom configuration attached)
                           </span>
-                        )}
+                        ) : null}
                       </span>
                       <span className="shrink-0 tabular-nums">
                         {formatPrice(

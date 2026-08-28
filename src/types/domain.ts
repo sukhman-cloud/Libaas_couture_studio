@@ -428,11 +428,17 @@ export interface OrderAddressSnapshot {
  * One ordered line. `productId` is retained for navigation/analytics
  * (products are archived, never hard-deleted), but the snapshot fields
  * make the line historically self-sufficient: name, slug and the exact
- * price charged survive any later product change. The Phase-7 reserved
- * configuration fields ride over from the cart line verbatim — an order
- * must never silently lose configuration data. Phase 7 will additionally
- * snapshot the actual measurement VALUES (not just the profile
- * reference) into its customization record.
+ * price charged survive any later product change. Configuration fields
+ * ride over from the cart line — an order must never silently lose
+ * configuration data.
+ *
+ * Phase 7A validates the stitching configuration inside the order
+ * transaction and snapshots the measurement profile LABEL alongside the
+ * reference, so the historical order stays readable even after the
+ * profile is renamed or archived. Phase 7B must additionally snapshot
+ * the measurement VALUES at order time (see docs/phase-7a-stitching.md)
+ * — a profile is mutable and the values the studio stitches against must
+ * be the values the customer ordered with.
  */
 export interface OrderItem {
   id: ID;
@@ -445,10 +451,11 @@ export interface OrderItem {
   /** unitPrice × quantity, integer paise. */
   lineSubtotal: Money;
   configurationKey: string;
-  /** Reserved Phase-7 fields, carried from the cart line untouched. */
   stitching?: {
     selected: boolean;
     measurementProfileId?: ID;
+    /** Label snapshot taken at order time (Phase 7A). */
+    measurementProfileLabel?: string;
   };
   customizationRequestId?: ID;
   notes?: string;

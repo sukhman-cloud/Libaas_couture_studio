@@ -1,5 +1,9 @@
 import "server-only";
 import { createHash, randomBytes, randomUUID } from "crypto";
+import {
+  checkCartLineConfiguration,
+  itemHasConfiguration,
+} from "@/server/cart/configuration";
 import { validateCheckoutAddress } from "@/server/checkout/service";
 import {
   effectivePriceOf,
@@ -63,6 +67,10 @@ export interface PlacedOrderView {
     unitPrice: Money;
     lineSubtotal: Money;
     hasConfiguration: boolean;
+    /** The line was ordered with studio stitching (Phase 7A). */
+    stitched: boolean;
+    /** Label snapshot of the measurement profile at order time. */
+    measurementProfileLabel?: string;
   }>;
   shippingAddress: OrderAddressSnapshot;
   customerName: string;
@@ -80,6 +88,7 @@ export type CreateOrderResult =
         | "item_unavailable"
         | "price_changed"
         | "invalid_quantity"
+        | "configuration_invalid"
         | "address_invalid"
         | "currency_mismatch";
       message: string;
@@ -141,11 +150,11 @@ function toPlacedView(order: Order): PlacedOrderView {
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       lineSubtotal: item.lineSubtotal,
-      hasConfiguration:
-        item.configurationKey !== "" ||
-        item.stitching !== undefined ||
-        item.customizationRequestId !== undefined ||
-        (item.notes !== undefined && item.notes !== ""),
+      hasConfiguration: itemHasConfiguration(item),
+      stitched: item.stitching?.selected === true,
+      ...(item.stitching?.measurementProfileLabel
+        ? { measurementProfileLabel: item.stitching.measurementProfileLabel }
+        : {}),
     })),
     shippingAddress: order.shippingAddress,
     customerName: order.customer.name,
@@ -274,6 +283,36 @@ export async function createOrderFromCheckout(input: {
           );
         }
 
+        /* Stitching configuration (Phase 7A) — the SAME check the cart
+           and checkout run, re-run against transaction-scoped rows: the
+           profile must still exist, belong to this customer and be
+           unarchived, and the product must still offer stitching. */
+        const configCheck = await checkCartLineConfiguration({
+          userId: user.id,
+          item: line,
+          product,
+          repos: tx,
+        });
+        if (!configCheck.ok) {
+          throw new OrderRejection(
+            reject(
+              "configuration_invalid",
+              "A stitching configuration in your bag needs attention. Review your bag and try again.",
+            ),
+          );
+        }
+        /* Fresh snapshot object (never the cart line's reference): the
+           profile LABEL is copied at order time so the historical order
+           stays readable after any later rename or archive. */
+        const stitchingSnapshot =
+          configCheck.stitched && configCheck.profile
+            ? {
+                selected: true,
+                measurementProfileId: configCheck.profile.id,
+                measurementProfileLabel: configCheck.profile.label,
+              }
+            : undefined;
+
         const current = effectivePriceOf(product);
         if (
           line.unitPrice.currency !== currency ||
@@ -313,7 +352,9 @@ export async function createOrderFromCheckout(input: {
           unitPrice: { amount: line.unitPrice.amount, currency },
           lineSubtotal: { amount: linePaise, currency },
           configurationKey: line.configurationKey,
-          ...(line.stitching === undefined ? {} : { stitching: line.stitching }),
+          ...(stitchingSnapshot === undefined
+            ? {}
+            : { stitching: stitchingSnapshot }),
           ...(line.customizationRequestId === undefined
             ? {}
             : { customizationRequestId: line.customizationRequestId }),

@@ -26,8 +26,12 @@ const initialState: AccountFormState = {};
 
 export function MeasurementForm({
   profile,
+  returnTo,
 }: {
   profile: MeasurementProfile | null;
+  /** Already-validated same-origin path to return to after saving —
+   *  used when a profile is created mid-configuration (Phase 7A). */
+  returnTo?: string;
 }) {
   const [state, formAction, isPending] = useActionState(
     saveMeasurementProfile,
@@ -71,6 +75,7 @@ export function MeasurementForm({
     <form action={formAction} className="space-y-5" noValidate>
       {state.error && <Alert tone="danger">{state.error}</Alert>}
       {profile && <input type="hidden" name="profileId" value={profile.id} />}
+      {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
 
       <Card>
         <CardContent className="space-y-4">

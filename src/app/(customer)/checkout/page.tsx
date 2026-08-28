@@ -16,7 +16,10 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Caption, Heading, Text } from "@/components/ui/typography";
 import { getCustomerUser } from "@/lib/auth/customer-session";
 import { formatPrice } from "@/lib/utils";
-import { getCheckoutView } from "@/server/checkout/service";
+import {
+  configurationIssueMessage,
+  getCheckoutView,
+} from "@/server/checkout/service";
 import { generateIdempotencyKey } from "@/server/orders/service";
 
 export const metadata: Metadata = {
@@ -198,8 +201,37 @@ export default async function CheckoutPage({
                             </p>
                           </div>
 
-                          {item.hasConfiguration && (
+                          {/* Stitching configuration (Phase 7A) —
+                              profile label only; never internal keys. */}
+                          {item.configuration.stitched ? (
+                            <p className="flex flex-wrap items-center gap-2 text-sm">
+                              <Badge tone="gold">Stitched</Badge>
+                              {item.configuration.measurementProfileLabel && (
+                                <span className="text-muted">
+                                  Measurement:{" "}
+                                  {item.configuration.measurementProfileLabel}
+                                </span>
+                              )}
+                            </p>
+                          ) : item.configuration.hasConfiguration ? (
                             <Badge tone="navy">Custom configuration attached</Badge>
+                          ) : null}
+
+                          {!item.unavailable && item.configuration.issue && (
+                            <>
+                              <Alert tone="warning" className="py-2">
+                                {configurationIssueMessage(
+                                  item.configuration,
+                                  item.name ?? "this piece",
+                                )}{" "}
+                                Update it from your bag.
+                              </Alert>
+                              <LineAttention
+                                itemId={item.itemId}
+                                productName={item.name ?? "this piece"}
+                                showAcceptPrice={false}
+                              />
+                            </>
                           )}
 
                           {item.unavailable && (
@@ -299,11 +331,13 @@ export default async function CheckoutPage({
                   disabledReason={
                     view.readiness === "cart_invalid"
                       ? "Remove the unavailable pieces above to continue."
-                      : view.readiness === "price_changed"
-                        ? "Review the price changes above to continue."
-                        : view.readiness === "address_required"
-                          ? "Add a delivery address to continue."
-                          : undefined
+                      : view.readiness === "configuration_invalid"
+                        ? "A stitching configuration above needs attention to continue."
+                        : view.readiness === "price_changed"
+                          ? "Review the price changes above to continue."
+                          : view.readiness === "address_required"
+                            ? "Add a delivery address to continue."
+                            : undefined
                   }
                 />
               </CardContent>

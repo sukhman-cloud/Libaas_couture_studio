@@ -2,11 +2,11 @@
 
 Boutique application for **Libaas Couture Studio** — customer storefront + admin management, built with Next.js (App Router) + TypeScript + Tailwind CSS v4.
 
-> **Phase 6C (current): Orders.** "Place order" on `/checkout` now creates a real, persisted **Order** — one atomic transaction that re-validates everything (account, address ownership, availability, price snapshots), copies product/customer/address snapshots into the order, computes totals server-side in integer paise, and clears the bag only on commit. Order numbers are non-sequential `LCS-XXXX-XXXX`; a server-minted idempotency key makes double-clicks, retries and refreshes return the *same* order. No payment is taken and none is claimed — the studio confirms payment and delivery after the order is placed. Details: `docs/phase-6c-orders.md`.
+> **Phase 7A (current): Stitching & measurements in the cart.** Products that offer stitching can now be added **Unstitched** or **Stitched with one of the customer's measurement profiles** — validated by a single server-side configuration validator (profile ownership, archival, product capability), keyed by a server-derived `configurationKey` so the same product holds separate lines per configuration, changeable per-line in the bag (with safe quantity merging), carried into the order with a profile-label snapshot, and blocked at checkout the moment a configuration goes stale. No stitching price exists, so none is invented. Details: `docs/phase-7a-stitching.md`.
 >
 > **Phase 6B: Instagram integration.** The home page's social section renders the studio's latest Instagram posts — photos, reels and carousels at the API's full quality — through a server-side service over the official Meta Graph API (token never reaches the browser; cached 15 min; an Instagram outage can never break the site). Implemented and fully tested against a conformant API mock; goes live the moment the owner's Meta access token lands in `.env.local` — setup guide: `docs/phase-6b-instagram.md`.
 >
-> Completed so far: **Phase 1** foundation · **Phase 2** design system + app shells · **Phase 3** customer accounts (auth, addresses, measurements) · **Phase 4A** admin catalog (products, categories, collections, media) · **Phase 4B** customer catalog browsing · **Phase 4C** search, filters and product detail · **Phase 5A** wishlist + cart · **Phase 5B** pre-database hardening · **Phase 5C** account concurrency hardening · **Phase 5D** PostgreSQL + Prisma foundation · **Phase 6A** checkout foundation · **Phase 6B** Instagram · **Phase 6C** orders.
+> Completed so far: **Phase 1** foundation · **Phase 2** design system + app shells · **Phase 3** customer accounts (auth, addresses, measurements) · **Phase 4A** admin catalog (products, categories, collections, media) · **Phase 4B** customer catalog browsing · **Phase 4C** search, filters and product detail · **Phase 5A** wishlist + cart · **Phase 5B** pre-database hardening · **Phase 5C** account concurrency hardening · **Phase 5D** PostgreSQL + Prisma foundation · **Phase 6A** checkout foundation · **Phase 6B** Instagram · **Phase 6C** orders · **Phase 7A** stitching & measurements.
 
 ## Run locally (ਲੋਕਲ ਚਲਾਉਣ ਲਈ)
 
@@ -58,6 +58,7 @@ src/
 │   └── ...
 ├── server/
 │   ├── account/           # security.ts — the one seam for account mutations
+│   ├── cart/              # configuration.ts — the ONE stitching validator (Phase 7A)
 │   ├── checkout/          # service.ts — checkout view model + readiness (Phase 6A)
 │   ├── orders/            # service.ts — the cart→order transaction (Phase 6C)
 │   ├── instagram/         # service.ts — official Graph API feed (Phase 6B)

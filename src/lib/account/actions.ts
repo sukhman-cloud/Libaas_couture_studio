@@ -78,6 +78,18 @@ async function requireCustomer() {
   return user;
 }
 
+/**
+ * A return path is honoured only when it is a same-origin absolute path
+ * — the same open-redirect discipline as the login `from` param. A
+ * leading `//`, a backslash, or a scheme all fall back to the default.
+ */
+function safeReturnPath(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  if (!value.startsWith("/") || value.startsWith("//")) return null;
+  if (value.includes("\\") || value.includes(":")) return null;
+  return value;
+}
+
 /* ── profile ────────────────────────────────────────────────────── */
 
 export async function updateProfile(
@@ -359,6 +371,14 @@ export async function saveMeasurementProfile(
 
   revalidatePath("/account/measurements");
   revalidatePath("/account");
+  // Phase 7A: a profile created mid-configuration (e.g. from a product
+  // page) returns to where the customer was, so the new profile can be
+  // selected immediately. The path is validated — never an open redirect.
+  const returnTo = safeReturnPath(formData.get("returnTo"));
+  if (returnTo) {
+    revalidatePath(returnTo);
+    redirect(returnTo);
+  }
   redirect("/account/measurements?saved=1");
 }
 

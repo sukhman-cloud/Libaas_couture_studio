@@ -161,9 +161,14 @@ export default async function ProductPage({
   if (!product) notFound();
 
   const customer = await getCustomerUser();
-  const [collections, wishlisted] = await Promise.all([
+  const [collections, wishlisted, measurementProfiles] = await Promise.all([
     publishedCollectionsOf(product),
     customer ? isWishlisted(customer.id, product.id) : Promise.resolve(false),
+    // Only for the stitching selector: the customer's own ACTIVE profiles
+    // (listByUserId excludes archived ones by contract).
+    customer && product.stitchingAvailable
+      ? getRepositories().measurementProfiles.listByUserId(customer.id)
+      : Promise.resolve([]),
   ]);
 
   const category = product.categoryId
@@ -362,8 +367,9 @@ export default async function ProductPage({
               </p>
             )}
 
-            {/* Bag + wishlist. Signed-out visitors are routed to sign in
-                rather than shown a control that quietly does nothing. */}
+            {/* Bag + wishlist + stitching configuration (Phase 7A).
+                Signed-out visitors are routed to sign in rather than
+                shown a control that quietly does nothing. */}
             <div className="mt-8">
               <ProductActions
                 slug={product.slug}
@@ -371,13 +377,20 @@ export default async function ProductPage({
                 signedIn={customer !== null}
                 initiallyWishlisted={wishlisted}
                 returnTo={`/products/${product.slug}`}
+                stitchingAvailable={product.stitchingAvailable}
+                measurementProfiles={measurementProfiles.map((profile) => ({
+                  id: profile.id,
+                  label: profile.label,
+                  unit: profile.unit,
+                  isDefault: profile.isDefault,
+                }))}
               />
             </div>
 
             <div className="mt-6 rounded-2xl border border-cream-200 p-5">
               <Text size="sm">
-                Online ordering is coming soon. To enquire about this piece or
-                start a custom order, visit the studio or message us.
+                To enquire about this piece or discuss a fully custom
+                design, visit the studio or message us.
               </Text>
               <div className="mt-4 flex flex-wrap gap-3">
                 <Link

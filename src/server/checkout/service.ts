@@ -4,6 +4,7 @@ import { getRepositories } from "@/server/data";
 import {
   getCartView,
   type CartLine,
+  type CartLineConfiguration,
 } from "@/server/commerce/service";
 import type { CustomerAddress, Money, User } from "@/types/domain";
 
@@ -72,11 +73,12 @@ export interface CheckoutItem {
   /** Live price, shown when it differs from the snapshot. */
   currentPrice?: Money;
   /**
-   * Phase-7 reserved cart fields (configurationKey / stitching /
-   * customization / notes) are present on this line. Checkout surfaces a
-   * neutral indicator and never touches the fields themselves.
+   * The line's stitching configuration, resolved by the cart service
+   * (Phase 7A): whether it is stitched, the measurement profile label,
+   * and any issue that blocks checkout. `hasConfiguration` inside it
+   * keeps the neutral badge for other reserved fields (notes etc.).
    */
-  hasConfiguration: boolean;
+  configuration: CartLineConfiguration;
 }
 
 /** One thing blocking checkout, with a stable code the UI can key on. */
@@ -85,6 +87,7 @@ export interface CheckoutIssue {
     | "empty_cart"
     | "item_unavailable"
     | "price_changed"
+    | "configuration_invalid"
     | "address_required"
     | "address_invalid";
   message: string;
@@ -95,6 +98,7 @@ export interface CheckoutIssue {
 export type CheckoutReadiness =
   | "empty_cart"
   | "cart_invalid"
+  | "configuration_invalid"
   | "price_changed"
   | "address_required"
   | "ready";
@@ -129,6 +133,21 @@ export interface CheckoutView {
 
 export const DELIVERY_NOTE =
   "Shipping charges will be confirmed by the studio.";
+
+/** Customer wording for a configuration that no longer holds (§23). */
+export function configurationIssueMessage(
+  configuration: CartLineConfiguration,
+  name: string,
+): string {
+  switch (configuration.issue) {
+    case "profile_archived":
+      return `The measurement profile for ${name} was deleted. Choose another profile or switch to unstitched.`;
+    case "stitching_not_available":
+      return `${name} is no longer offered with stitching. Switch it to unstitched to continue.`;
+    default:
+      return `The measurement profile for ${name} is no longer available. Choose another profile or switch to unstitched.`;
+  }
+}
 
 /* ── address validation (§7) ────────────────────────────────────── */
 
@@ -191,10 +210,7 @@ function toCheckoutAddress(
   };
 }
 
-function toCheckoutItem(
-  line: CartLine,
-  hasConfiguration: boolean,
-): CheckoutItem {
+function toCheckoutItem(line: CartLine): CheckoutItem {
   return {
     itemId: line.itemId,
     slug: line.product?.slug,
@@ -206,7 +222,7 @@ function toCheckoutItem(
     unavailable: line.unavailable,
     priceChanged: line.priceChanged,
     currentPrice: line.priceChanged ? line.product?.currentPrice : undefined,
-    hasConfiguration,
+    configuration: line.configuration,
   };
 }
 
@@ -223,30 +239,14 @@ export async function getCheckoutView(
 ): Promise<CheckoutView> {
   const repos = getRepositories();
 
-  // One read each — the cart view resolves its own products.
-  const [cartView, profile, rawCart] = await Promise.all([
+  // One read each — the cart view resolves products AND configuration
+  // health (stitching selection, measurement-profile ownership/liveness).
+  const [cartView, profile] = await Promise.all([
     getCartView(user.id),
     repos.customers.getByUserId(user.id),
-    repos.carts.getByUserId(user.id),
   ]);
 
-  // Phase-7 reserved fields ride along untouched; checkout only signals
-  // their presence (§13).
-  const configuredIds = new Set(
-    (rawCart?.items ?? [])
-      .filter(
-        (item) =>
-          item.configurationKey !== "" ||
-          item.stitching !== undefined ||
-          item.customizationRequestId !== undefined ||
-          (item.notes !== undefined && item.notes !== ""),
-      )
-      .map((item) => item.id),
-  );
-
-  const items = cartView.lines.map((line) =>
-    toCheckoutItem(line, configuredIds.has(line.itemId)),
-  );
+  const items = cartView.lines.map(toCheckoutItem);
 
   const defaultAddressId = profile?.defaultAddressId;
   const addresses = (profile?.addresses ?? []).map((address) =>
@@ -279,6 +279,15 @@ export async function getCheckoutView(
         itemId: item.itemId,
         message: `${item.name ?? "A piece in your bag"} is no longer available. Remove it to continue.`,
       });
+    } else if (item.configuration.issue) {
+      issues.push({
+        code: "configuration_invalid",
+        itemId: item.itemId,
+        message: configurationIssueMessage(
+          item.configuration,
+          item.name ?? "a piece in your bag",
+        ),
+      });
     } else if (item.priceChanged) {
       issues.push({
         code: "price_changed",
@@ -294,6 +303,10 @@ export async function getCheckoutView(
     issues.push({ code: "empty_cart", message: "Your cart is empty." });
   } else if (items.some((item) => item.unavailable)) {
     readiness = "cart_invalid";
+  } else if (
+    items.some((item) => !item.unavailable && item.configuration.issue)
+  ) {
+    readiness = "configuration_invalid";
   } else if (items.some((item) => item.priceChanged)) {
     readiness = "price_changed";
   } else if (!selectedAddress) {

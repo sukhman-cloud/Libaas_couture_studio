@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { ImageOff, ShoppingCart } from "lucide-react";
+import { CartLineConfigurationControl } from "@/components/commerce/cart-line-configuration";
 import { CartLineControls } from "@/components/commerce/cart-line-controls";
 import { ClearButton } from "@/components/commerce/clear-button";
 import { Alert } from "@/components/ui/alert";
@@ -14,11 +15,13 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Caption, Heading, Text } from "@/components/ui/typography";
 import { getCustomerUser } from "@/lib/auth/customer-session";
 import { formatPrice } from "@/lib/utils";
+import { configurationIssueMessage } from "@/server/checkout/service";
 import {
   EMPTY_CART_VIEW,
   getCartView,
   MAX_QUANTITY_PER_ITEM,
 } from "@/server/commerce/service";
+import { getRepositories } from "@/server/data";
 
 export const metadata: Metadata = {
   title: "Your bag",
@@ -30,6 +33,19 @@ export default async function CartPage() {
   // The bag belongs to an account; anonymous visitors are invited to sign
   // in rather than shown an empty page that will not persist.
   const cart = user ? await getCartView(user.id) : EMPTY_CART_VIEW;
+
+  // Active measurement profiles for the per-line stitching control —
+  // loaded once, only when some line can actually use them (Phase 7A).
+  const needsProfiles =
+    user !== null &&
+    cart.lines.some(
+      (line) => line.configuration.stitched || line.product?.stitchingAvailable,
+    );
+  const measurementProfiles = needsProfiles
+    ? (await getRepositories().measurementProfiles.listByUserId(user!.id)).map(
+        (profile) => ({ id: profile.id, label: profile.label }),
+      )
+    : [];
 
   return (
     <Container>
@@ -78,6 +94,13 @@ export default async function CartPage() {
                   {cart.unavailableCount === 1
                     ? "One piece in your bag is no longer available and is not included in the total."
                     : `${cart.unavailableCount} pieces in your bag are no longer available and are not included in the total.`}
+                </Alert>
+              )}
+              {cart.configurationIssueCount > 0 && (
+                <Alert tone="warning" className="mb-5">
+                  {cart.configurationIssueCount === 1
+                    ? "One stitching configuration in your bag needs attention before checkout."
+                    : `${cart.configurationIssueCount} stitching configurations in your bag need attention before checkout.`}
                 </Alert>
               )}
 
@@ -143,6 +166,32 @@ export default async function CartPage() {
                                 No longer available
                               </Badge>
                             )}
+
+                            <CartLineConfigurationControl
+                              itemId={line.itemId}
+                              productName={name}
+                              stitched={line.configuration.stitched}
+                              measurementProfileId={
+                                line.configuration.measurementProfileId
+                              }
+                              measurementProfileLabel={
+                                line.configuration.measurementProfileLabel
+                              }
+                              issueMessage={
+                                !line.unavailable && line.configuration.issue
+                                  ? configurationIssueMessage(
+                                      line.configuration,
+                                      name,
+                                    )
+                                  : undefined
+                              }
+                              stitchingAvailable={
+                                line.product?.stitchingAvailable ?? false
+                              }
+                              unavailable={line.unavailable}
+                              profiles={measurementProfiles}
+                            />
+
                             {line.priceChanged && line.product && (
                               <Text tone="muted" size="sm">
                                 The price is now{" "}

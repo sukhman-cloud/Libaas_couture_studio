@@ -172,7 +172,9 @@ export async function confirmCheckout(
     // item-specific message ("The price of X has changed…").
     if (
       result.outcome === "rejected" &&
-      (result.reason === "price_changed" || result.reason === "item_unavailable")
+      (result.reason === "price_changed" ||
+        result.reason === "item_unavailable" ||
+        result.reason === "configuration_invalid")
     ) {
       const view = await getCheckoutView(user, addressId);
       const specific = view.issues[0]?.message;
