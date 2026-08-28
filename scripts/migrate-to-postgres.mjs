@@ -93,16 +93,14 @@ const date = (value) => new Date(value);
 
 /* ── 3. plan (counts from the source) ───────────────────────────── */
 
-// Orders/appointments have no tables yet (deferred to the checkout phase)
-// and are empty by design. Refuse loudly if that ever stops being true —
-// silently dropping records is exactly what this script must never do.
-for (const key of ["orders", "appointments"]) {
-  if ((store[key] ?? []).length > 0) {
-    fail(
-      `the store contains ${store[key].length} ${key} row(s), but this phase has no ${key} tables. ` +
-        "Migrating them silently would lose data — extend the schema first.",
-    );
-  }
+// Appointments still have no tables (deferred). Refuse loudly if a store
+// ever holds one — silently dropping records is exactly what this script
+// must never do. Orders became real tables in Phase 6C and are imported.
+if ((store.appointments ?? []).length > 0) {
+  fail(
+    `the store contains ${store.appointments.length} appointments row(s), but this phase has no appointments tables. ` +
+      "Migrating them silently would lose data — extend the schema first.",
+  );
 }
 
 const src = {
@@ -117,6 +115,7 @@ const src = {
   products: store.products ?? [],
   carts: store.carts ?? [],
   wishlists: store.wishlists ?? [],
+  orders: store.orders ?? [],
 };
 
 const planned = {
@@ -150,6 +149,8 @@ const planned = {
   cartItems: src.carts.reduce((n, c) => n + (c.items?.length ?? 0), 0),
   wishlists: src.wishlists.length,
   wishlistItems: src.wishlists.reduce((n, w) => n + (w.items?.length ?? 0), 0),
+  orders: src.orders.length,
+  orderItems: src.orders.reduce((n, o) => n + (o.items?.length ?? 0), 0),
 };
 
 // The PostgreSQL provider looks emails up lowercase and SKUs uppercase
@@ -450,6 +451,57 @@ async function importAll(tx) {
         position,
         createdAt: date(item.createdAt),
         updatedAt: date(item.updatedAt),
+      })),
+    ),
+  });
+
+  await tx.order.createMany({
+    data: src.orders.map((o) => ({
+      id: o.id,
+      orderNumber: o.orderNumber,
+      userId: ownerOf(o),
+      status: o.status,
+      currency: o.currency,
+      subtotalAmount: BigInt(o.subtotal.amount),
+      shippingAmount: BigInt(o.shippingAmount.amount),
+      taxAmount: BigInt(o.taxAmount.amount),
+      discountAmount: BigInt(o.discountAmount.amount),
+      totalAmount: BigInt(o.total.amount),
+      customerName: o.customer.name,
+      customerEmail: o.customer.email ?? null,
+      customerPhone: o.customer.phone ?? null,
+      shipFullName: o.shippingAddress.fullName,
+      shipPhone: o.shippingAddress.phone,
+      shipLine1: o.shippingAddress.line1,
+      shipLine2: o.shippingAddress.line2 ?? null,
+      shipLocality: o.shippingAddress.locality ?? null,
+      shipCity: o.shippingAddress.city,
+      shipState: o.shippingAddress.state,
+      shipPostalCode: o.shippingAddress.postalCode,
+      shipCountry: o.shippingAddress.country,
+      idempotencyKey: o.idempotencyKey,
+      requestFingerprint: o.requestFingerprint,
+      createdAt: date(o.createdAt),
+      updatedAt: date(o.updatedAt),
+    })),
+  });
+  await tx.orderItem.createMany({
+    data: src.orders.flatMap((o) =>
+      (o.items ?? []).map((item, position) => ({
+        id: item.id,
+        orderId: o.id,
+        productId: item.productId,
+        nameSnapshot: item.nameSnapshot,
+        slugSnapshot: item.slugSnapshot,
+        quantity: item.quantity,
+        unitPriceAmount: BigInt(item.unitPrice.amount),
+        lineSubtotalAmount: BigInt(item.lineSubtotal.amount),
+        currency: item.unitPrice.currency,
+        configurationKey: item.configurationKey ?? "",
+        stitching: item.stitching ?? undefined,
+        customizationRequestId: item.customizationRequestId ?? null,
+        notes: item.notes ?? null,
+        position,
       })),
     ),
   });

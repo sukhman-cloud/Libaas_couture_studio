@@ -17,6 +17,7 @@ import { Caption, Heading, Text } from "@/components/ui/typography";
 import { getCustomerUser } from "@/lib/auth/customer-session";
 import { formatPrice } from "@/lib/utils";
 import { getCheckoutView } from "@/server/checkout/service";
+import { generateIdempotencyKey } from "@/server/orders/service";
 
 export const metadata: Metadata = {
   title: "Checkout",
@@ -288,8 +289,12 @@ export default async function CheckoutPage({
                   confirmation.
                 </Text>
 
+                {/* One key per RENDER: a double-click or retry of this
+                    form replays the same order; a fresh page load mints a
+                    fresh key (and meets an already-empty cart). */}
                 <ConfirmForm
                   addressId={view.selectedAddress?.id ?? null}
+                  idempotencyKey={generateIdempotencyKey()}
                   disabled={view.readiness !== "ready"}
                   disabledReason={
                     view.readiness === "cart_invalid"

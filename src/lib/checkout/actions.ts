@@ -4,10 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCustomerUser } from "@/lib/auth/customer-session";
 import { saveAddress, type AccountFormState } from "@/lib/account/actions";
-import {
-  getCheckoutView,
-  validateCheckoutAddress,
-} from "@/server/checkout/service";
+import { getCheckoutView } from "@/server/checkout/service";
+import { createOrderFromCheckout } from "@/server/orders/service";
 import { effectivePriceOf, isPurchasable } from "@/server/commerce/service";
 import { getRepositories } from "@/server/data";
 import { customerLockKey, withLock } from "@/server/lock";
@@ -133,14 +131,17 @@ export async function saveAddressFromCheckout(
   return result;
 }
 
-/* ── final confirmation (§15/§21 — creates NOTHING) ─────────────── */
+/* ── place order (Phase 6C) ─────────────────────────────────────── */
 
 /**
- * Re-run EVERY check server-side and, only if the whole checkout is ready,
- * hand off to the review-complete screen. Deliberately creates no record:
- * Phase 6B replaces the redirect with the real order transaction. Any
- * price/subtotal/product fields a tampered form submits are simply never
- * read.
+ * The real order creation. Everything of consequence happens inside
+ * `createOrderFromCheckout`'s single transaction (re-reads, validation,
+ * snapshots, totals, cart clearing); this action only maps the typed
+ * result to friendly form state and navigates to the success page. Any
+ * price/subtotal/product fields a tampered form submits are never read.
+ * The idempotency key was minted server-side at checkout render, so a
+ * double-click, refresh-retry or second tab of the same render returns
+ * the SAME order.
  */
 export async function confirmCheckout(
   _prev: CheckoutFormState,
@@ -150,29 +151,40 @@ export async function confirmCheckout(
   if (!user) redirect("/login?from=/checkout");
 
   const addressId = formData.get("addressId");
+  const idempotencyKey = formData.get("idempotencyKey");
   if (typeof addressId !== "string" || !addressId) {
     return { error: "Choose a delivery address to continue." };
   }
 
-  // Ownership + validity first — a foreign id fails before anything else.
-  const address = await validateCheckoutAddress(user.id, addressId);
-  if (!address.ok) {
-    return {
-      error: "That address is not available. Choose one of your saved addresses.",
-    };
+  // The service runs FIRST: its idempotency check must win over every
+  // other consideration, so a resubmission of an already-committed order
+  // (double-click, network retry, refresh recovery) returns the SAME
+  // order even though the cart is empty by then. All validation lives
+  // inside its transaction anyway.
+  const result = await createOrderFromCheckout({
+    user,
+    addressId,
+    idempotencyKey: typeof idempotencyKey === "string" ? idempotencyKey : "",
+  });
+
+  if (result.outcome === "rejected" || result.outcome === "failed") {
+    // For line-scoped rejections, the checkout view has the nicer,
+    // item-specific message ("The price of X has changed…").
+    if (
+      result.outcome === "rejected" &&
+      (result.reason === "price_changed" || result.reason === "item_unavailable")
+    ) {
+      const view = await getCheckoutView(user, addressId);
+      const specific = view.issues[0]?.message;
+      if (specific) return { error: specific };
+    }
+    return { error: result.message };
   }
 
-  // Full authoritative re-validation: cart contents, availability,
-  // publication, quantities and price snapshots as they exist RIGHT NOW.
-  const view = await getCheckoutView(user, addressId);
-  if (view.readiness !== "ready") {
-    const first = view.issues[0]?.message;
-    return {
-      error:
-        first ??
-        "Your bag changed while you were checking out. Review it and try again.",
-    };
-  }
-
-  redirect(`/checkout/complete?address=${encodeURIComponent(addressId)}`);
+  revalidatePath("/cart");
+  revalidatePath("/checkout");
+  revalidatePath("/", "layout"); // header cart count
+  redirect(
+    `/checkout/complete?order=${encodeURIComponent(result.order.orderNumber)}`,
+  );
 }

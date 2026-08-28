@@ -88,6 +88,15 @@ enum FitPreference {
   @@map("fit_preference")
 }
 
+/// Phase 6C: deliberately one value — every order is created `pending`
+/// (placed, awaiting the studio; NO payment has occurred). Future phases
+/// extend this enum additively via their own migrations.
+enum OrderStatus {
+  pending
+
+  @@map("order_status")
+}
+
 // ── Identity ────────────────────────────────────────────────────────
 
 model User {
@@ -106,6 +115,7 @@ model User {
   measurementProfiles MeasurementProfile[]
   cart                Cart?
   wishlist            Wishlist?
+  orders              Order[]
 
   @@map("users")
 }
@@ -347,6 +357,7 @@ model Product {
   media               ProductMedia[]
   cartItems           CartItem[]
   wishlistItems       WishlistItem[]
+  orderItems          OrderItem[]
 
   @@index([status])
   @@index([availability])
@@ -486,4 +497,99 @@ model CartItem {
   @@index([cartId])
   @@index([productId])
   @@map("cart_items")
+}
+
+// ── Orders (Phase 6C) ───────────────────────────────────────────────
+
+/// A placed order — an immutable HISTORICAL record of one confirmed
+/// checkout. Customer identity and the delivery address are SNAPSHOTS of
+/// their values at purchase time; later profile/address edits or
+/// deletions never touch an order. Money is integer paise (BIGINT);
+/// shipping/tax/discount are explicit zeros until those systems exist,
+/// so total = subtotal + shipping + tax − discount holds from day one.
+model Order {
+  id String @id
+
+  /// Customer-facing number (LCS-XXXX-XXXX): unique, unguessable,
+  /// non-sequential — never the database id.
+  orderNumber String @unique @map("order_number")
+
+  /// Owning USER id — the ownership anchor, like every customer record.
+  userId String      @map("user_id")
+  status OrderStatus
+
+  currency        String
+  subtotalAmount  BigInt @map("subtotal_amount")
+  shippingAmount  BigInt @map("shipping_amount")
+  taxAmount       BigInt @map("tax_amount")
+  discountAmount  BigInt @map("discount_amount")
+  totalAmount     BigInt @map("total_amount")
+
+  // Customer snapshot at purchase time.
+  customerName  String  @map("customer_name")
+  customerEmail String? @map("customer_email")
+  customerPhone String? @map("customer_phone")
+
+  // Delivery-address snapshot at purchase time (fulfilment values only —
+  // no address-book id, no home/work label).
+  shipFullName   String  @map("ship_full_name")
+  shipPhone      String  @map("ship_phone")
+  shipLine1      String  @map("ship_line1")
+  shipLine2      String? @map("ship_line2")
+  shipLocality   String? @map("ship_locality")
+  shipCity       String  @map("ship_city")
+  shipState      String  @map("ship_state")
+  shipPostalCode String  @map("ship_postal_code")
+  shipCountry    String  @map("ship_country")
+
+  /// One confirmation can never create two orders: unique per user. The
+  /// fingerprint of the client-supplied inputs lets the service tell an
+  /// honest replay (same → return this order) from key reuse (reject).
+  idempotencyKey     String @map("idempotency_key")
+  requestFingerprint String @map("request_fingerprint")
+
+  createdAt DateTime @map("created_at")
+  updatedAt DateTime @map("updated_at")
+
+  user  User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  items OrderItem[]
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId])
+  @@map("orders")
+}
+
+/// One ordered line. Snapshot fields (name, slug, exact prices) make it
+/// historically self-sufficient; `productId` is RETAINED with RESTRICT
+/// because products in this architecture are archived, never hard-deleted
+/// — and the FK now also guarantees nothing can ever hard-delete a
+/// product that has been ordered. Phase-7 reserved configuration fields
+/// ride over from the cart line verbatim.
+model OrderItem {
+  id      String @id
+  orderId String @map("order_id")
+
+  productId    String @map("product_id")
+  nameSnapshot String @map("name_snapshot")
+  slugSnapshot String @map("slug_snapshot")
+
+  quantity           Int
+  unitPriceAmount    BigInt @map("unit_price_amount")
+  lineSubtotalAmount BigInt @map("line_subtotal_amount")
+  currency           String
+
+  configurationKey       String  @map("configuration_key")
+  stitching              Json?
+  customizationRequestId String? @map("customization_request_id")
+  notes                  String?
+
+  /// Original position in the order's line array — preserves order.
+  position Int
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
 }

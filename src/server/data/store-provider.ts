@@ -416,6 +416,51 @@ function buildStoreRepositories(
       async getById(id) {
         return store.orders.find((o) => o.id === id) ?? null;
       },
+      async getByOrderNumber(orderNumber) {
+        return store.orders.find((o) => o.orderNumber === orderNumber) ?? null;
+      },
+      async getByIdempotencyKey(userId, idempotencyKey) {
+        return (
+          store.orders.find(
+            (o) => o.userId === userId && o.idempotencyKey === idempotencyKey,
+          ) ?? null
+        );
+      },
+      async listByUserId(userId, params) {
+        const mine = store.orders
+          .filter((o) => o.userId === userId)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        return paginate(mine, params);
+      },
+      async create(order) {
+        // Uniqueness enforced INSIDE the guarded section, so the check and
+        // the insert are one critical section (mirrors the database
+        // constraints the Prisma provider gets for free).
+        return guard(async () => {
+          if (store.orders.some((o) => o.orderNumber === order.orderNumber)) {
+            throw new Error(
+              `Order number already exists: ${order.orderNumber}`,
+            );
+          }
+          if (
+            store.orders.some(
+              (o) =>
+                o.userId === order.userId &&
+                o.idempotencyKey === order.idempotencyKey,
+            )
+          ) {
+            throw new Error(
+              "Duplicate idempotency key: an order for this confirmation already exists.",
+            );
+          }
+          store.orders.push(order);
+          await persistOrRollback(() => {
+            const index = store.orders.lastIndexOf(order);
+            if (index !== -1) store.orders.splice(index, 1);
+          });
+          return order;
+        });
+      },
       async count() {
         return store.orders.length;
       },

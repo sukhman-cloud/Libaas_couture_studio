@@ -174,9 +174,27 @@ export interface MediaRepository {
 
 /* ── Operations (Phase 1) ───────────────────────────────────────── */
 
+/**
+ * Orders (Phase 6C). Orders are HISTORICAL records: there is deliberately
+ * no update and no delete — later phases add narrow status-transition
+ * methods, never general mutation.
+ *
+ * INVARIANTS `create` must enforce (both providers):
+ *   - `orderNumber` unique;
+ *   - `(userId, idempotencyKey)` unique — the same confirmation can never
+ *     create two orders. Violations throw; callers treat a duplicate-key
+ *     failure as "look the existing order up and return it".
+ */
 export interface OrderRepository {
   list(params?: ListParams): Promise<Order[]>;
   getById(id: ID): Promise<Order | null>;
+  /** Lookup by the customer-facing number. Callers verify ownership. */
+  getByOrderNumber(orderNumber: string): Promise<Order | null>;
+  /** The order a (user, idempotency key) pair already created, if any. */
+  getByIdempotencyKey(userId: ID, idempotencyKey: string): Promise<Order | null>;
+  /** Ownership-scoped listing, newest first (Phase 6D's order history). */
+  listByUserId(userId: ID, params?: ListParams): Promise<Order[]>;
+  create(order: Order): Promise<Order>;
   count(): Promise<number>;
   countByStatus(): Promise<Record<string, number>>;
 }

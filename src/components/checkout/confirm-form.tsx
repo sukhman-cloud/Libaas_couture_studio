@@ -12,17 +12,21 @@ import {
 const initialState: CheckoutFormState = {};
 
 /**
- * The final-confirmation step. The form carries ONLY the selected address
- * id — every price, quantity and availability decision is recomputed
- * server-side by the confirm action, which creates nothing yet (Phase 6B
- * replaces its success path with the real order transaction).
+ * The place-order step (Phase 6C). The form carries ONLY the selected
+ * address id and the server-minted idempotency key — every price,
+ * quantity and availability decision is recomputed inside the order
+ * transaction. The key makes a double-click, refresh-retry or network
+ * retry return the SAME order instead of creating another; disabling the
+ * button below is UX, never the guarantee.
  */
 export function ConfirmForm({
   addressId,
+  idempotencyKey,
   disabled,
   disabledReason,
 }: {
   addressId: string | null;
+  idempotencyKey: string;
   disabled: boolean;
   disabledReason?: string;
 }) {
@@ -33,8 +37,9 @@ export function ConfirmForm({
 
   return (
     <form action={formAction} className="space-y-3" noValidate>
-      {/* Server re-validates ownership of this id; nothing else is read. */}
+      {/* Server re-validates ownership of these; nothing else is read. */}
       {addressId && <input type="hidden" name="addressId" value={addressId} />}
+      <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
 
       <div aria-live="polite">
         {state.error && <Alert tone="danger">{state.error}</Alert>}
@@ -46,7 +51,7 @@ export function ConfirmForm({
         isLoading={isPending}
         disabled={disabled}
       >
-        Confirm details
+        {isPending ? "Placing your order…" : "Place order"}
       </Button>
       {disabled && disabledReason && (
         <Text tone="muted" size="sm" role="status">
@@ -54,8 +59,8 @@ export function ConfirmForm({
         </Text>
       )}
       <Text tone="muted" size="sm">
-        Confirming reviews your details — no order is placed and nothing is
-        charged. Online order placement opens in an upcoming update.
+        No payment is taken online — the studio confirms payment and
+        delivery with you after the order is placed.
       </Text>
     </form>
   );

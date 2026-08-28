@@ -10,6 +10,8 @@ import type {
   CustomerProfile,
   MeasurementProfile,
   MediaAsset,
+  Order,
+  OrderItem,
   PasswordResetToken,
   Product,
   ProductAttributes,
@@ -86,6 +88,7 @@ export type MeasurementRow = Prisma.MeasurementProfileGetPayload<{
 }>;
 
 export type CartRow = Prisma.CartGetPayload<{ include: { items: true } }>;
+export type OrderRow = Prisma.OrderGetPayload<{ include: { items: true } }>;
 export type WishlistRow = Prisma.WishlistGetPayload<{
   include: { items: true };
 }>;
@@ -108,6 +111,10 @@ export const MEASUREMENT_INCLUDE = {
 export const CART_INCLUDE = {
   items: { orderBy: { position: "asc" } },
 } satisfies Prisma.CartInclude;
+
+export const ORDER_INCLUDE = {
+  items: { orderBy: { position: "asc" } },
+} satisfies Prisma.OrderInclude;
 
 export const WISHLIST_INCLUDE = {
   items: { orderBy: { position: "asc" } },
@@ -367,6 +374,120 @@ export function toWishlist(row: WishlistRow): Wishlist {
     createdAt: iso(row.createdAt),
     updatedAt: iso(row.updatedAt),
   };
+}
+
+/* ── orders (Phase 6C) ──────────────────────────────────────────── */
+
+function toOrderItem(row: Prisma.OrderItemGetPayload<object>): OrderItem {
+  return {
+    id: row.id,
+    productId: row.productId,
+    nameSnapshot: row.nameSnapshot,
+    slugSnapshot: row.slugSnapshot,
+    quantity: row.quantity,
+    unitPrice: {
+      amount: moneyAmount(row.unitPriceAmount),
+      currency: row.currency as OrderItem["unitPrice"]["currency"],
+    },
+    lineSubtotal: {
+      amount: moneyAmount(row.lineSubtotalAmount),
+      currency: row.currency as OrderItem["unitPrice"]["currency"],
+    },
+    configurationKey: row.configurationKey,
+    ...(row.stitching === null
+      ? {}
+      : { stitching: row.stitching as OrderItem["stitching"] }),
+    ...opt("customizationRequestId", row.customizationRequestId),
+    ...opt("notes", row.notes),
+  };
+}
+
+export function toOrder(row: OrderRow): Order {
+  const currency = row.currency as Order["currency"];
+  const money = (amount: bigint) => ({ amount: moneyAmount(amount), currency });
+  return {
+    id: row.id,
+    orderNumber: row.orderNumber,
+    userId: row.userId,
+    status: row.status,
+    customer: {
+      name: row.customerName,
+      ...opt("email", row.customerEmail),
+      ...opt("phone", row.customerPhone),
+    },
+    shippingAddress: {
+      fullName: row.shipFullName,
+      phone: row.shipPhone,
+      line1: row.shipLine1,
+      ...opt("line2", row.shipLine2),
+      ...opt("locality", row.shipLocality),
+      city: row.shipCity,
+      state: row.shipState,
+      postalCode: row.shipPostalCode,
+      country: row.shipCountry,
+    },
+    items: row.items.map(toOrderItem),
+    currency,
+    subtotal: money(row.subtotalAmount),
+    shippingAmount: money(row.shippingAmount),
+    taxAmount: money(row.taxAmount),
+    discountAmount: money(row.discountAmount),
+    total: money(row.totalAmount),
+    idempotencyKey: row.idempotencyKey,
+    requestFingerprint: row.requestFingerprint,
+    createdAt: iso(row.createdAt),
+    updatedAt: iso(row.updatedAt),
+  };
+}
+
+export function orderColumns(order: Order) {
+  return {
+    orderNumber: order.orderNumber,
+    userId: order.userId,
+    status: order.status,
+    currency: order.currency,
+    subtotalAmount: BigInt(order.subtotal.amount),
+    shippingAmount: BigInt(order.shippingAmount.amount),
+    taxAmount: BigInt(order.taxAmount.amount),
+    discountAmount: BigInt(order.discountAmount.amount),
+    totalAmount: BigInt(order.total.amount),
+    customerName: order.customer.name,
+    customerEmail: order.customer.email ?? null,
+    customerPhone: order.customer.phone ?? null,
+    shipFullName: order.shippingAddress.fullName,
+    shipPhone: order.shippingAddress.phone,
+    shipLine1: order.shippingAddress.line1,
+    shipLine2: order.shippingAddress.line2 ?? null,
+    shipLocality: order.shippingAddress.locality ?? null,
+    shipCity: order.shippingAddress.city,
+    shipState: order.shippingAddress.state,
+    shipPostalCode: order.shippingAddress.postalCode,
+    shipCountry: order.shippingAddress.country,
+    idempotencyKey: order.idempotencyKey,
+    requestFingerprint: order.requestFingerprint,
+    createdAt: new Date(order.createdAt),
+    updatedAt: new Date(order.updatedAt),
+  };
+}
+
+/** `stitching` JSONB: undefined stays OUT of the row (SQL NULL). */
+export function orderItemRows(order: Order) {
+  return order.items.map((item, position) => ({
+    id: item.id,
+    orderId: order.id,
+    productId: item.productId,
+    nameSnapshot: item.nameSnapshot,
+    slugSnapshot: item.slugSnapshot,
+    quantity: item.quantity,
+    unitPriceAmount: BigInt(item.unitPrice.amount),
+    lineSubtotalAmount: BigInt(item.lineSubtotal.amount),
+    currency: item.unitPrice.currency,
+    configurationKey: item.configurationKey,
+    ...(item.stitching === undefined ? {} : { stitching: item.stitching }),
+    customizationRequestId: item.customizationRequestId ?? null,
+    notes: item.notes ?? null,
+    position,
+  }));
 }
 
 /* ── write payload helpers (domain → columns) ───────────────────── */

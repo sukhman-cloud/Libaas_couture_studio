@@ -146,11 +146,18 @@ export type AddressValidation =
 export async function validateCheckoutAddress(
   userId: string,
   addressId: string,
+  // Injectable so the order-creation transaction (Phase 6C) can run the
+  // SAME validation against its transaction-scoped repositories — one
+  // implementation, checked twice: at render/confirm and inside the tx.
+  repos: Pick<
+    import("@/server/data/repositories").StoreRepositories,
+    "customers"
+  > = getRepositories(),
 ): Promise<AddressValidation> {
   if (typeof addressId !== "string" || !addressId) {
     return { ok: false, reason: "not_found" };
   }
-  const profile = await getRepositories().customers.getByUserId(userId);
+  const profile = await repos.customers.getByUserId(userId);
   const address = profile?.addresses.find((a) => a.id === addressId);
   if (!profile || !address) return { ok: false, reason: "not_found" };
 

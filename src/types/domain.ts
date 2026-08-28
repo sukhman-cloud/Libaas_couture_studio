@@ -384,44 +384,107 @@ export interface Wishlist extends Timestamps {
 }
 
 /**
- * Order lifecycle — supports the boutique workflow:
- * placed → paid → in_stitching → quality_check → ready → completed
- * (with cancelled/refunded as exits).
+ * Order lifecycle (Phase 6C).
+ *
+ * Deliberately ONE state today: every order is created as `pending` —
+ * placed by the customer, awaiting the studio. No payment has occurred
+ * and nothing here may claim otherwise. Future phases extend this union
+ * (each with its own migration): payment confirmation (6x), processing/
+ * stitching (7), shipping/delivery, and cancellation. Extending a union
+ * member list is additive and breaks nothing.
  */
-export type OrderStatus =
-  | "placed"
-  | "paid"
-  | "in_stitching"
-  | "quality_check"
-  | "ready"
-  | "out_for_delivery"
-  | "completed"
-  | "cancelled"
-  | "refunded";
+export type OrderStatus = "pending";
 
-export type FulfilmentMethod = "pickup" | "delivery";
+/**
+ * Customer identity AS IT WAS at the moment of purchase. Orders are
+ * historical records: the live User row keeps changing (name edits,
+ * deactivation), and the order must stay correct anyway.
+ */
+export interface OrderCustomerSnapshot {
+  name: string;
+  email?: string;
+  phone?: string;
+}
 
+/**
+ * Delivery address AS IT WAS at checkout — the values needed for
+ * fulfilment, not a reference. The CustomerAddress row can be edited or
+ * deleted later without touching any order. (The address book id and its
+ * home/work label are deliberately not part of the snapshot.)
+ */
+export interface OrderAddressSnapshot {
+  fullName: string;
+  phone: string;
+  line1: string;
+  line2?: string;
+  locality?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+}
+
+/**
+ * One ordered line. `productId` is retained for navigation/analytics
+ * (products are archived, never hard-deleted), but the snapshot fields
+ * make the line historically self-sufficient: name, slug and the exact
+ * price charged survive any later product change. The Phase-7 reserved
+ * configuration fields ride over from the cart line verbatim — an order
+ * must never silently lose configuration data. Phase 7 will additionally
+ * snapshot the actual measurement VALUES (not just the profile
+ * reference) into its customization record.
+ */
 export interface OrderItem {
   id: ID;
   productId: ID;
-  variantId?: ID;
   nameSnapshot: string;
-  unitPrice: Money;
+  slugSnapshot: string;
   quantity: number;
+  /** Price snapshot the line was charged at — integer paise. */
+  unitPrice: Money;
+  /** unitPrice × quantity, integer paise. */
+  lineSubtotal: Money;
+  configurationKey: string;
+  /** Reserved Phase-7 fields, carried from the cart line untouched. */
+  stitching?: {
+    selected: boolean;
+    measurementProfileId?: ID;
+  };
   customizationRequestId?: ID;
+  notes?: string;
 }
 
+/**
+ * A placed order — the historical record of one confirmed checkout.
+ *
+ * Money: integer paise throughout. shipping/tax/discount are explicit
+ * ZERO amounts (not absent) until those systems exist, so
+ * `total = subtotal + shipping + tax − discount` holds today and every
+ * later phase changes a value, never the formula.
+ *
+ * `idempotencyKey` is unique per user: the same confirmation can never
+ * create two orders (see the order service for the replay semantics).
+ */
 export interface Order extends Timestamps {
   id: ID;
+  /** Customer-facing number (LCS-XXXX-XXXX) — never the database id. */
   orderNumber: string;
+  /** Owning USER id — the ownership anchor, like every customer record. */
   userId: ID;
-  items: OrderItem[];
-  subtotal: Money;
-  total: Money;
   status: OrderStatus;
-  fulfilment: FulfilmentMethod;
-  shippingAddress?: Address;
-  notes?: string;
+  customer: OrderCustomerSnapshot;
+  shippingAddress: OrderAddressSnapshot;
+  items: OrderItem[];
+  currency: "INR";
+  subtotal: Money;
+  shippingAmount: Money;
+  taxAmount: Money;
+  discountAmount: Money;
+  total: Money;
+  idempotencyKey: string;
+  /** Fingerprint of the client-supplied confirmation inputs, for
+   *  distinguishing an honest replay from key reuse. */
+  requestFingerprint: string;
 }
 
 export type PaymentStatus = "pending" | "authorized" | "captured" | "failed" | "refunded";

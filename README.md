@@ -2,11 +2,11 @@
 
 Boutique application for **Libaas Couture Studio** — customer storefront + admin management, built with Next.js (App Router) + TypeScript + Tailwind CSS v4.
 
-> **Phase 6B (current): Instagram integration.** The home page's social section now renders the studio's latest Instagram posts — photos, reels and carousels at the API's full quality — through a server-side service over the official Meta Graph API (token never reaches the browser; cached 15 min; an Instagram outage can never break the site). Implemented and fully tested against a conformant API mock; goes live the moment the owner's Meta access token lands in `.env.local` — setup guide: `docs/phase-6b-instagram.md`.
+> **Phase 6C (current): Orders.** "Place order" on `/checkout` now creates a real, persisted **Order** — one atomic transaction that re-validates everything (account, address ownership, availability, price snapshots), copies product/customer/address snapshots into the order, computes totals server-side in integer paise, and clears the bag only on commit. Order numbers are non-sequential `LCS-XXXX-XXXX`; a server-minted idempotency key makes double-clicks, retries and refreshes return the *same* order. No payment is taken and none is claimed — the studio confirms payment and delivery after the order is placed. Details: `docs/phase-6c-orders.md`.
 >
-> **Phase 6A: Checkout foundation.** `/checkout` reviews the bag, the customer's details and the delivery address — all validated server-side by one checkout service (cart ownership, availability, price-snapshot changes with explicit acknowledgement, address ownership). The final confirmation deliberately creates **no order**: Phase 6B adds the Order model and its creation transaction on top of this exact view. No shipping rates, taxes or discounts are invented — the summary shows only what the application truly knows.
+> **Phase 6B: Instagram integration.** The home page's social section renders the studio's latest Instagram posts — photos, reels and carousels at the API's full quality — through a server-side service over the official Meta Graph API (token never reaches the browser; cached 15 min; an Instagram outage can never break the site). Implemented and fully tested against a conformant API mock; goes live the moment the owner's Meta access token lands in `.env.local` — setup guide: `docs/phase-6b-instagram.md`.
 >
-> Completed so far: **Phase 1** foundation · **Phase 2** design system + app shells · **Phase 3** customer accounts (auth, addresses, measurements) · **Phase 4A** admin catalog (products, categories, collections, media) · **Phase 4B** customer catalog browsing · **Phase 4C** search, filters and product detail · **Phase 5A** wishlist + cart · **Phase 5B** pre-database hardening · **Phase 5C** account concurrency hardening · **Phase 5D** PostgreSQL + Prisma foundation · **Phase 6A** checkout foundation.
+> Completed so far: **Phase 1** foundation · **Phase 2** design system + app shells · **Phase 3** customer accounts (auth, addresses, measurements) · **Phase 4A** admin catalog (products, categories, collections, media) · **Phase 4B** customer catalog browsing · **Phase 4C** search, filters and product detail · **Phase 5A** wishlist + cart · **Phase 5B** pre-database hardening · **Phase 5C** account concurrency hardening · **Phase 5D** PostgreSQL + Prisma foundation · **Phase 6A** checkout foundation · **Phase 6B** Instagram · **Phase 6C** orders.
 
 ## Run locally (ਲੋਕਲ ਚਲਾਉਣ ਲਈ)
 
@@ -59,6 +59,7 @@ src/
 ├── server/
 │   ├── account/           # security.ts — the one seam for account mutations
 │   ├── checkout/          # service.ts — checkout view model + readiness (Phase 6A)
+│   ├── orders/            # service.ts — the cart→order transaction (Phase 6C)
 │   ├── instagram/         # service.ts — official Graph API feed (Phase 6B)
 │   ├── data/              # repository interfaces + providers:
 │   │   │                  #   memory, JSON file, postgres (Prisma) —

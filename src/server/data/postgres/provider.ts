@@ -18,6 +18,10 @@ import { getPrismaClient } from "@/server/data/postgres/client";
 import {
   addressRows,
   CART_INCLUDE,
+  ORDER_INCLUDE,
+  orderColumns,
+  orderItemRows,
+  toOrder,
   cartColumns,
   cartItemRows,
   categoryColumns,
@@ -79,10 +83,10 @@ import type { CatalogStatus } from "@/types/domain";
  *   deliberately absent here: durability, atomicity and recovery are the
  *   database's job (see the provider notes in docs/phase-5d-database.md).
  *
- * - `orders`/`appointments` remain read-only interfaces over data that does
- *   not exist yet (Phase 1 placeholders; no Order/Appointment tables were
- *   created — the spec defers them). They return empty results, exactly
- *   like the empty JSON store.
+ * - `appointments` remains a read-only interface over data that does not
+ *   exist yet (no Appointment tables — deferred). Orders became real
+ *   tables in Phase 6C; order rows are immutable historical records, so
+ *   the repository offers create + reads and nothing else.
  */
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -395,17 +399,74 @@ function buildPostgresRepositories(db: Db): StoreRepositories {
     /* ── operations placeholders (no tables yet — Phase 6+) ───────── */
 
     orders: {
-      async list() {
-        return [];
+      async list(params) {
+        const rows = await db.order.findMany({
+          ...ATOMIC_READ,
+          include: ORDER_INCLUDE,
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        });
+        return paginate(rows.map(toOrder), params);
       },
-      async getById() {
-        return null;
+      async getById(id) {
+        const row = await db.order.findUnique({
+          ...ATOMIC_READ,
+          where: { id },
+          include: ORDER_INCLUDE,
+        });
+        return row ? toOrder(row) : null;
+      },
+      async getByOrderNumber(orderNumber) {
+        const row = await db.order.findUnique({
+          ...ATOMIC_READ,
+          where: { orderNumber },
+          include: ORDER_INCLUDE,
+        });
+        return row ? toOrder(row) : null;
+      },
+      async getByIdempotencyKey(userId, idempotencyKey) {
+        const row = await db.order.findUnique({
+          ...ATOMIC_READ,
+          where: { userId_idempotencyKey: { userId, idempotencyKey } },
+          include: ORDER_INCLUDE,
+        });
+        return row ? toOrder(row) : null;
+      },
+      async listByUserId(userId, params) {
+        const rows = await db.order.findMany({
+          ...ATOMIC_READ,
+          where: { userId },
+          include: ORDER_INCLUDE,
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        });
+        return paginate(rows.map(toOrder), params);
+      },
+      async create(order) {
+        // orderNumber and (userId, idempotencyKey) uniqueness are enforced
+        // by the database constraints; a violation surfaces as P2002 and
+        // callers resolve it by looking the existing order up.
+        const row = await runAtomic(db, async (tx) => {
+          await tx.order.create({
+            data: { id: order.id, ...orderColumns(order) },
+          });
+          await tx.orderItem.createMany({ data: orderItemRows(order) });
+          return tx.order.findUniqueOrThrow({
+            where: { id: order.id },
+            include: ORDER_INCLUDE,
+          });
+        });
+        return toOrder(row);
       },
       async count() {
-        return 0;
+        return db.order.count();
       },
       async countByStatus() {
-        return {};
+        const groups = await db.order.groupBy({
+          by: ["status"],
+          _count: { _all: true },
+        });
+        const counts: Record<string, number> = {};
+        for (const group of groups) counts[group.status] = group._count._all;
+        return counts;
       },
     },
 

@@ -545,6 +545,51 @@ for (const wishlist of wishlists) {
   }
 }
 
+/* ── orders (Phase 6C — historical records) ─────────────────────── */
+
+const orders = rows("orders");
+checkTimestamps(orders, "order");
+checkDuplicates(orders, "orders", (o) => o.orderNumber, "order number");
+checkDuplicates(
+  orders,
+  "orders",
+  (o) => `${ownerOf(o)}::${o.idempotencyKey}`,
+  "user + idempotency key",
+);
+for (const order of orders) {
+  checkOwner(order, "Order");
+  checkMoney(order.subtotal, `Order ${order.id} subtotal`);
+  checkMoney(order.shippingAmount, `Order ${order.id} shippingAmount`);
+  checkMoney(order.taxAmount, `Order ${order.id} taxAmount`);
+  checkMoney(order.discountAmount, `Order ${order.id} discountAmount`);
+  checkMoney(order.total, `Order ${order.id} total`);
+  if (typeof order.orderNumber !== "string" || !order.orderNumber) {
+    problem("shape", `Order ${order.id}: missing orderNumber.`);
+  }
+  if (!order.shippingAddress?.line1 || !order.customer?.name) {
+    problem("shape", `Order ${order.id}: missing customer/address snapshot.`);
+  }
+  const items = Array.isArray(order.items) ? order.items : [];
+  if (!Array.isArray(order.items) || items.length === 0) {
+    problem("shape", `Order ${order.id}: has no items.`);
+  }
+  for (const item of items) {
+    checkMoney(item.unitPrice, `Order ${order.id} item ${item.id} unitPrice`);
+    checkMoney(item.lineSubtotal, `Order ${order.id} item ${item.id} lineSubtotal`);
+    if (!Number.isInteger(item.quantity) || item.quantity < 1) {
+      problem("shape", `Order ${order.id} item ${item.id}: invalid quantity ${item.quantity}.`);
+    }
+    if (!item.nameSnapshot) {
+      problem("shape", `Order ${order.id} item ${item.id}: missing name snapshot.`);
+    }
+    // Snapshots make items self-sufficient; a missing product is only a
+    // note-worthy orphan, never a blocker for HISTORICAL data.
+    if (!productIds.has(item.productId)) {
+      problem("orphan", `Order ${order.id} item ${item.id} references missing product ${item.productId}.`);
+    }
+  }
+}
+
 /* ── report ─────────────────────────────────────────────────────── */
 
 const counts = Object.fromEntries(COLLECTIONS.map((key) => [key, rows(key).length]));
@@ -556,6 +601,7 @@ const embedded = {
   productSecondaryCategoryLinks: products.reduce((n, p) => n + (p.secondaryCategoryIds?.length ?? 0), 0),
   cartItems: carts.reduce((n, c) => n + (c.items?.length ?? 0), 0),
   wishlistItems: wishlists.reduce((n, w) => n + (w.items?.length ?? 0), 0),
+  orderItems: orders.reduce((n, o) => n + (o.items?.length ?? 0), 0),
 };
 
 // Every owned row counts, not just carts and wishlists — a customer with

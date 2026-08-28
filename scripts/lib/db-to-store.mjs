@@ -48,6 +48,7 @@ export async function reconstructStore(prisma) {
     products,
     carts,
     wishlists,
+    orders,
   ] = await Promise.all([
     prisma.user.findMany(byCreatedThenId),
     prisma.authCredential.findMany(byCreatedThenId),
@@ -76,6 +77,10 @@ export async function reconstructStore(prisma) {
       include: { items: { orderBy: { position: "asc" } } },
     }),
     prisma.wishlist.findMany({
+      ...byCreatedThenId,
+      include: { items: { orderBy: { position: "asc" } } },
+    }),
+    prisma.order.findMany({
       ...byCreatedThenId,
       include: { items: { orderBy: { position: "asc" } } },
     }),
@@ -167,7 +172,57 @@ export async function reconstructStore(prisma) {
       createdAt: iso(row.createdAt),
     })),
 
-    orders: [],
+    orders: orders.map((row) => {
+      const order = {
+        id: row.id,
+        orderNumber: row.orderNumber,
+        userId: row.userId,
+        status: row.status,
+      };
+      const customer = { name: row.customerName };
+      opt(customer, "email", row.customerEmail);
+      opt(customer, "phone", row.customerPhone);
+      order.customer = customer;
+      const shippingAddress = {
+        fullName: row.shipFullName,
+        phone: row.shipPhone,
+        line1: row.shipLine1,
+      };
+      opt(shippingAddress, "line2", row.shipLine2);
+      opt(shippingAddress, "locality", row.shipLocality);
+      shippingAddress.city = row.shipCity;
+      shippingAddress.state = row.shipState;
+      shippingAddress.postalCode = row.shipPostalCode;
+      shippingAddress.country = row.shipCountry;
+      order.shippingAddress = shippingAddress;
+      order.items = row.items.map((item) => {
+        const line = {
+          id: item.id,
+          productId: item.productId,
+          nameSnapshot: item.nameSnapshot,
+          slugSnapshot: item.slugSnapshot,
+          quantity: item.quantity,
+          unitPrice: money(item.unitPriceAmount, item.currency),
+          lineSubtotal: money(item.lineSubtotalAmount, item.currency),
+          configurationKey: item.configurationKey,
+        };
+        if (item.stitching !== null) line.stitching = item.stitching;
+        opt(line, "customizationRequestId", item.customizationRequestId);
+        opt(line, "notes", item.notes);
+        return line;
+      });
+      order.currency = row.currency;
+      order.subtotal = money(row.subtotalAmount, row.currency);
+      order.shippingAmount = money(row.shippingAmount, row.currency);
+      order.taxAmount = money(row.taxAmount, row.currency);
+      order.discountAmount = money(row.discountAmount, row.currency);
+      order.total = money(row.totalAmount, row.currency);
+      order.idempotencyKey = row.idempotencyKey;
+      order.requestFingerprint = row.requestFingerprint;
+      order.createdAt = iso(row.createdAt);
+      order.updatedAt = iso(row.updatedAt);
+      return order;
+    }),
     appointments: [],
 
     users: users.map((row) => {
@@ -300,6 +355,8 @@ export async function countAll(prisma) {
     cartItems,
     wishlists,
     wishlistItems,
+    orders,
+    orderItems,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.authCredential.count(),
@@ -319,6 +376,8 @@ export async function countAll(prisma) {
     prisma.cartItem.count(),
     prisma.wishlist.count(),
     prisma.wishlistItem.count(),
+    prisma.order.count(),
+    prisma.orderItem.count(),
   ]);
   return {
     users,
@@ -339,5 +398,7 @@ export async function countAll(prisma) {
     cartItems,
     wishlists,
     wishlistItems,
+    orders,
+    orderItems,
   };
 }
