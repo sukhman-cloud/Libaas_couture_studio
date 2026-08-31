@@ -61,6 +61,7 @@ const COLLECTIONS = [
   "wishlists",
   "orders",
   "appointments",
+  "customizationRequests",
 ];
 
 for (const key of COLLECTIONS) {
@@ -587,6 +588,32 @@ for (const order of orders) {
     if (!productIds.has(item.productId)) {
       problem("orphan", `Order ${order.id} item ${item.id} references missing product ${item.productId}.`);
     }
+  }
+}
+
+/* ── customization requests (Phase 7B foundation) ───────────────── */
+
+const customizationRequests = rows("customizationRequests");
+checkIds(customizationRequests, "customizationRequests");
+checkTimestamps(customizationRequests, "customizationRequest");
+const measurementIds = new Set(measurements.map((m) => m.id));
+for (const request of customizationRequests) {
+  checkOwner(request, "CustomizationRequest");
+  if (!["draft", "quoted", "approved", "rejected"].includes(request.status)) {
+    problem("shape", `CustomizationRequest ${request.id}: unknown status "${request.status}".`);
+  }
+  if (typeof request.details !== "string" || !request.details || request.details.length > 1000) {
+    problem("shape", `CustomizationRequest ${request.id}: details missing or over 1000 chars.`);
+  }
+  // FK targets must exist or the Postgres import will refuse the row.
+  if (request.productId !== undefined && !productIds.has(request.productId)) {
+    problem("orphan", `CustomizationRequest ${request.id} references missing product ${request.productId}.`);
+  }
+  if (
+    request.measurementProfileId !== undefined &&
+    !measurementIds.has(request.measurementProfileId)
+  ) {
+    problem("orphan", `CustomizationRequest ${request.id} references missing measurement profile ${request.measurementProfileId}.`);
   }
 }
 

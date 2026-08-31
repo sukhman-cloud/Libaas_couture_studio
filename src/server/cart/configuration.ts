@@ -1,11 +1,14 @@
 import "server-only";
+import { allMeasurementFields, fieldBounds } from "@/config/measurements";
 import { isPurchasable } from "@/server/commerce/service";
 import { getRepositories } from "@/server/data";
 import type { StoreRepositories } from "@/server/data/repositories";
 import type {
   CartItem,
+  CustomizationRequest,
   MeasurementProfile,
   OrderItem,
+  OrderItemMeasurementSnapshot,
   Product,
 } from "@/types/domain";
 
@@ -283,4 +286,144 @@ export async function checkCartLineConfiguration(options: {
     return { ok: false, issue: "profile_archived", profile };
   }
   return { ok: true, stitched: true, profile };
+}
+
+/* ── the order-time measurement snapshot (Phase 7B) ─────────────── */
+
+/** Bounds for the KNOWN catalog keys, by unit — the same rule the
+ *  measurement form enforces at save time. Unknown keys are allowed by
+ *  design (domain doc) and get only the generic numeric checks. */
+const KNOWN_FIELDS = new Map(allMeasurementFields.map((f) => [f.key, f]));
+
+export type MeasurementSnapshotResult =
+  | { ok: true; snapshot: OrderItemMeasurementSnapshot }
+  | { ok: false; problem: string };
+
+/**
+ * Build the immutable order-time measurement snapshot from the
+ * AUTHORITATIVE profile row (§18) — the one validator for it, used
+ * inside the order transaction on the transaction-read profile. The
+ * browser never contributes a single measurement value.
+ *
+ * Every field is re-validated even though the save path already
+ * enforced it — an order snapshot must never memorialise malformed
+ * data:
+ *   - unit is exactly "cm" or "in" (value/unit pairs stay unambiguous)
+ *   - at least one value; every key a non-empty string; every value a
+ *     finite positive number; known catalog keys within the same bounds
+ *     the form enforces for that unit
+ *   - fitPreference one of the known preferences, or ABSENT — absence
+ *     is preserved, no default is invented (§17)
+ *   - notes within the profile schema's 500-char cap
+ * The returned snapshot is a fresh deep copy — never a reference into
+ * the live profile object.
+ */
+export function buildMeasurementSnapshot(
+  profile: MeasurementProfile,
+): MeasurementSnapshotResult {
+  if (profile.unit !== "cm" && profile.unit !== "in") {
+    return { ok: false, problem: `unknown unit "${String(profile.unit)}"` };
+  }
+  if (!Array.isArray(profile.values) || profile.values.length === 0) {
+    return { ok: false, problem: "profile has no measurement values" };
+  }
+  const values: OrderItemMeasurementSnapshot["values"] = [];
+  for (const entry of profile.values) {
+    if (typeof entry?.key !== "string" || entry.key.trim() === "") {
+      return { ok: false, problem: "measurement with an empty key" };
+    }
+    if (typeof entry.value !== "number" || !Number.isFinite(entry.value) || entry.value <= 0) {
+      return { ok: false, problem: `invalid value for "${entry.key}"` };
+    }
+    const known = KNOWN_FIELDS.get(entry.key);
+    if (known) {
+      const { min, max } = fieldBounds(known, profile.unit);
+      if (entry.value < min || entry.value > max) {
+        return { ok: false, problem: `"${entry.key}" outside ${min}–${max} ${profile.unit}` };
+      }
+    }
+    values.push({ key: entry.key, value: entry.value });
+  }
+  if (
+    profile.fitPreference !== undefined &&
+    !["fitted", "regular", "relaxed"].includes(profile.fitPreference)
+  ) {
+    return { ok: false, problem: "unknown fit preference" };
+  }
+  if (profile.notes !== undefined && (typeof profile.notes !== "string" || profile.notes.length > 500)) {
+    return { ok: false, problem: "malformed profile notes" };
+  }
+
+  return {
+    ok: true,
+    snapshot: {
+      unit: profile.unit,
+      ...(profile.fitPreference === undefined
+        ? {}
+        : { fitPreference: profile.fitPreference }),
+      ...(profile.notes === undefined || profile.notes === ""
+        ? {}
+        : { notes: profile.notes }),
+      values,
+    },
+  };
+}
+
+/* ── customization attachment seam (Phase 7B foundation) ────────── */
+
+export type CustomizationAttachmentValidation =
+  | { ok: true; request: CustomizationRequest }
+  | {
+      ok: false;
+      reason: "customization_not_available" | "request_invalid";
+      message: string;
+    };
+
+/**
+ * Validation seam for the FUTURE flow that attaches a customization
+ * request to a cart line / order. Nothing calls it from a customer path
+ * yet (attachment is deliberately not wired in Phase 7B), but the rules
+ * live here from day one so the designer phase cannot re-invent them:
+ * the product must offer customization, and the request must exist and
+ * belong to the authenticated user — foreign, unknown and missing ids
+ * fail identically.
+ */
+export async function validateCustomizationAttachment(options: {
+  userId: string;
+  product: Product;
+  customizationRequestId: string;
+  repos?: Pick<StoreRepositories, "customizationRequests">;
+}): Promise<CustomizationAttachmentValidation> {
+  const { userId, product, customizationRequestId } = options;
+  const repos = options.repos ?? getRepositories();
+
+  if (!product.customizationAvailable) {
+    return {
+      ok: false,
+      reason: "customization_not_available",
+      message: "This piece is not offered with customisation.",
+    };
+  }
+  const request =
+    typeof customizationRequestId === "string" && customizationRequestId
+      ? await repos.customizationRequests.getById(customizationRequestId)
+      : null;
+  if (!request || request.userId !== userId) {
+    return {
+      ok: false,
+      reason: "request_invalid",
+      message: "That customisation request is not available.",
+    };
+  }
+  // A request that names a product binds to THAT product — it can never
+  // be attached to a different piece. Product-less (fully custom)
+  // requests are free to attach anywhere customization is offered.
+  if (request.productId !== undefined && request.productId !== product.id) {
+    return {
+      ok: false,
+      reason: "request_invalid",
+      message: "That customisation request is not available.",
+    };
+  }
+  return { ok: true, request };
 }

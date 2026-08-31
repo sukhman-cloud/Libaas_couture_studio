@@ -116,6 +116,7 @@ const src = {
   carts: store.carts ?? [],
   wishlists: store.wishlists ?? [],
   orders: store.orders ?? [],
+  customizationRequests: store.customizationRequests ?? [],
 };
 
 const planned = {
@@ -151,6 +152,7 @@ const planned = {
   wishlistItems: src.wishlists.reduce((n, w) => n + (w.items?.length ?? 0), 0),
   orders: src.orders.length,
   orderItems: src.orders.reduce((n, o) => n + (o.items?.length ?? 0), 0),
+  customizationRequests: src.customizationRequests.length,
 };
 
 // The PostgreSQL provider looks emails up lowercase and SKUs uppercase
@@ -504,6 +506,19 @@ async function importAll(tx) {
         position,
       })),
     ),
+  });
+
+  await tx.customizationRequest.createMany({
+    data: src.customizationRequests.map((request) => ({
+      id: request.id,
+      userId: request.userId,
+      productId: request.productId ?? null,
+      measurementProfileId: request.measurementProfileId ?? null,
+      details: request.details,
+      status: request.status,
+      createdAt: new Date(request.createdAt),
+      updatedAt: new Date(request.updatedAt),
+    })),
   });
 
   // In-transaction verification: every planned row must be present.

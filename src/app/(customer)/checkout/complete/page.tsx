@@ -86,6 +86,11 @@ export default async function OrderPlacedPage({
                               ? ` — ${item.measurementProfileLabel}`
                               : ""}
                             )
+                            <span className="block">
+                              {item.hasMeasurementSnapshot
+                                ? "Measurements recorded with this order."
+                                : "Measurement snapshot unavailable for this historical order."}
+                            </span>
                           </span>
                         ) : item.hasConfiguration ? (
                           <span className="ml-2 text-xs text-muted">

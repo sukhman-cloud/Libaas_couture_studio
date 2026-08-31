@@ -109,13 +109,14 @@ model User {
   createdAt DateTime @map("created_at")
   updatedAt DateTime @map("updated_at")
 
-  credential          AuthCredential?
-  profile             CustomerProfile?
-  passwordResetTokens PasswordResetToken[]
-  measurementProfiles MeasurementProfile[]
-  cart                Cart?
-  wishlist            Wishlist?
-  orders              Order[]
+  credential            AuthCredential?
+  profile               CustomerProfile?
+  passwordResetTokens   PasswordResetToken[]
+  measurementProfiles   MeasurementProfile[]
+  cart                  Cart?
+  wishlist              Wishlist?
+  orders                Order[]
+  customizationRequests CustomizationRequest[]
 
   @@map("users")
 }
@@ -219,8 +220,9 @@ model MeasurementProfile {
   createdAt  DateTime  @map("created_at")
   updatedAt  DateTime  @map("updated_at")
 
-  user   User               @relation(fields: [userId], references: [id], onDelete: Restrict)
-  values MeasurementValue[]
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  values                MeasurementValue[]
+  customizationRequests CustomizationRequest[]
 
   @@index([userId])
   @@map("measurement_profiles")
@@ -239,6 +241,45 @@ model MeasurementValue {
 
   @@id([profileId, key])
   @@map("measurement_values")
+}
+
+/// Phase 7B: only `draft` is produced today; the remaining states are the
+/// documented roadmap for the future quoting workflow.
+enum CustomizationStatus {
+  draft
+  quoted
+  approved
+  rejected
+
+  @@map("customization_status")
+}
+
+/// Customization-request foundation (Phase 7B). Deliberately minimal —
+/// reference-image uploads and cart/order attachment arrive with the
+/// designer phase. All FKs RESTRICT: a request never blocks softly-deleted
+/// rows (nothing hard-deletes users/products/profiles anyway) and history
+/// is never cascaded away.
+model CustomizationRequest {
+  id     String @id
+  userId String @map("user_id")
+
+  /// Absent for fully custom designs.
+  productId            String? @map("product_id")
+  measurementProfileId String? @map("measurement_profile_id")
+
+  /// Customer free text — untrusted, app-capped, always rendered escaped.
+  details String
+
+  status    CustomizationStatus
+  createdAt DateTime            @map("created_at")
+  updatedAt DateTime            @map("updated_at")
+
+  user               User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  product            Product?            @relation(fields: [productId], references: [id], onDelete: Restrict)
+  measurementProfile MeasurementProfile? @relation(fields: [measurementProfileId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@map("customization_requests")
 }
 
 // ── Catalog ─────────────────────────────────────────────────────────
@@ -355,9 +396,10 @@ model Product {
   secondaryCategories ProductSecondaryCategory[]
   collections         ProductCollection[]
   media               ProductMedia[]
-  cartItems           CartItem[]
-  wishlistItems       WishlistItem[]
-  orderItems          OrderItem[]
+  cartItems             CartItem[]
+  wishlistItems         WishlistItem[]
+  orderItems            OrderItem[]
+  customizationRequests CustomizationRequest[]
 
   @@index([status])
   @@index([availability])

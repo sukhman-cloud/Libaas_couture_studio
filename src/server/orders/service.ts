@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash, randomBytes, randomUUID } from "crypto";
 import {
+  buildMeasurementSnapshot,
   checkCartLineConfiguration,
   itemHasConfiguration,
 } from "@/server/cart/configuration";
@@ -71,6 +72,12 @@ export interface PlacedOrderView {
     stitched: boolean;
     /** Label snapshot of the measurement profile at order time. */
     measurementProfileLabel?: string;
+    /**
+     * The order carries the immutable measurement snapshot (Phase 7B).
+     * False for stitched orders placed BEFORE 7B — readers must say the
+     * snapshot is unavailable, never substitute current profile values.
+     */
+    hasMeasurementSnapshot: boolean;
   }>;
   shippingAddress: OrderAddressSnapshot;
   customerName: string;
@@ -155,6 +162,7 @@ function toPlacedView(order: Order): PlacedOrderView {
       ...(item.stitching?.measurementProfileLabel
         ? { measurementProfileLabel: item.stitching.measurementProfileLabel }
         : {}),
+      hasMeasurementSnapshot: item.stitching?.measurements !== undefined,
     })),
     shippingAddress: order.shippingAddress,
     customerName: order.customer.name,
@@ -302,16 +310,34 @@ export async function createOrderFromCheckout(input: {
           );
         }
         /* Fresh snapshot object (never the cart line's reference): the
-           profile LABEL is copied at order time so the historical order
-           stays readable after any later rename or archive. */
-        const stitchingSnapshot =
-          configCheck.stitched && configCheck.profile
-            ? {
-                selected: true,
-                measurementProfileId: configCheck.profile.id,
-                measurementProfileLabel: configCheck.profile.label,
-              }
-            : undefined;
+           profile LABEL (7A) and the full MEASUREMENTS (7B) are copied
+           at order time from the transaction-read profile, so the
+           historical order keeps representing exactly what was ordered
+           no matter how the profile is edited, re-united, re-labelled
+           or archived afterwards. The browser contributed nothing here.
+           A profile that fails snapshot validation stops the WHOLE
+           order — no partial snapshot is ever written. */
+        let stitchingSnapshot;
+        if (configCheck.stitched && configCheck.profile) {
+          const measured = buildMeasurementSnapshot(configCheck.profile);
+          if (!measured.ok) {
+            console.error(
+              `[orders] measurement snapshot refused for profile ${configCheck.profile.id}: ${measured.problem}`,
+            );
+            throw new OrderRejection(
+              reject(
+                "configuration_invalid",
+                "A measurement profile in your bag needs attention. Review it and try again.",
+              ),
+            );
+          }
+          stitchingSnapshot = {
+            selected: true,
+            measurementProfileId: configCheck.profile.id,
+            measurementProfileLabel: configCheck.profile.label,
+            measurements: measured.snapshot,
+          };
+        }
 
         const current = effectivePriceOf(product);
         if (

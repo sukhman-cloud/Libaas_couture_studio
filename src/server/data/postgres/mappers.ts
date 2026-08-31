@@ -8,6 +8,7 @@ import type {
   Collection,
   CustomerAddress,
   CustomerProfile,
+  CustomizationRequest,
   MeasurementProfile,
   MediaAsset,
   Order,
@@ -209,6 +210,36 @@ export function toMeasurementProfile(row: MeasurementRow): MeasurementProfile {
   };
 }
 
+/* ── customization requests (Phase 7B) ──────────────────────────── */
+
+export function toCustomizationRequest(
+  row: Prisma.CustomizationRequestGetPayload<object>,
+): CustomizationRequest {
+  return {
+    id: row.id,
+    userId: row.userId,
+    ...opt("productId", row.productId),
+    ...opt("measurementProfileId", row.measurementProfileId),
+    details: row.details,
+    status: row.status,
+    createdAt: iso(row.createdAt),
+    updatedAt: iso(row.updatedAt),
+  };
+}
+
+export function customizationRequestColumns(request: CustomizationRequest) {
+  return {
+    id: request.id,
+    userId: request.userId,
+    productId: request.productId ?? null,
+    measurementProfileId: request.measurementProfileId ?? null,
+    details: request.details,
+    status: request.status,
+    createdAt: new Date(request.createdAt),
+    updatedAt: new Date(request.updatedAt),
+  };
+}
+
 /* ── catalog ────────────────────────────────────────────────────── */
 
 export function toMediaAsset(
@@ -396,7 +427,10 @@ function toOrderItem(row: Prisma.OrderItemGetPayload<object>): OrderItem {
     configurationKey: row.configurationKey,
     ...(row.stitching === null
       ? {}
-      : { stitching: row.stitching as OrderItem["stitching"] }),
+      : // JSONB carries the nested measurement snapshot (Phase 7B); the
+        // shape is produced exclusively by the order service, so the
+        // unknown-bridge is a serialization cast, not a validation skip.
+        { stitching: row.stitching as unknown as OrderItem["stitching"] }),
     ...opt("customizationRequestId", row.customizationRequestId),
     ...opt("notes", row.notes),
   };
@@ -483,7 +517,11 @@ export function orderItemRows(order: Order) {
     lineSubtotalAmount: BigInt(item.lineSubtotal.amount),
     currency: item.unitPrice.currency,
     configurationKey: item.configurationKey,
-    ...(item.stitching === undefined ? {} : { stitching: item.stitching }),
+    ...(item.stitching === undefined
+      ? {}
+      : // Serialized verbatim as JSONB (incl. the nested Phase 7B
+        // measurement snapshot); the object is plain data by construction.
+        { stitching: item.stitching as unknown as Prisma.InputJsonValue }),
     customizationRequestId: item.customizationRequestId ?? null,
     notes: item.notes ?? null,
     position,

@@ -303,20 +303,37 @@ export interface MeasurementProfile extends Timestamps {
   archivedAt?: ISODateTime;
 }
 
+/**
+ * Customization request lifecycle. Phase 7B stores and reaches only
+ * `draft` — the remaining states are the documented roadmap for the
+ * quoting workflow (admin review → quote → customer decision) and are
+ * NOT produced by any current flow.
+ */
 export type CustomizationStatus =
   | "draft"
   | "quoted"
   | "approved"
   | "rejected";
 
+/**
+ * A customer's request for a customised piece (Phase 7B foundation).
+ *
+ * Deliberately minimal: identity, ownership, an optional product and an
+ * optional own measurement profile, the customer's untrusted free-text
+ * `details`, and a status. Reference-image uploads belong to the future
+ * customization-designer phase together with its storage design — no
+ * upload field exists until then. Cart/order attachment
+ * (`CartItem.customizationRequestId`) is likewise NOT wired yet; the
+ * validation seam for it already exists in
+ * src/server/cart/configuration.ts.
+ */
 export interface CustomizationRequest extends Timestamps {
   id: ID;
+  /** Owning User id — every access must verify this. */
   userId: ID;
   productId?: ID; // absent for fully custom designs
   measurementProfileId?: ID;
   details: string;
-  /** Customer-uploaded reference images. */
-  referenceImageUrls: string[];
   status: CustomizationStatus;
 }
 
@@ -425,6 +442,24 @@ export interface OrderAddressSnapshot {
 }
 
 /**
+ * Immutable order-time copy of the measurements a stitched line was
+ * placed with (Phase 7B). Values and unit are copied VERBATIM from the
+ * customer's profile inside the order transaction — the profile stays
+ * fully mutable afterwards while the order keeps representing exactly
+ * what was ordered. `fitPreference` is absent when the profile had none
+ * (no default is invented), and the unit/value pairs are never
+ * reinterpreted between cm and in.
+ */
+export interface OrderItemMeasurementSnapshot {
+  unit: MeasurementUnit;
+  fitPreference?: FitPreference;
+  /** The profile's tailor notes at order time, when any existed. */
+  notes?: string;
+  /** Exact `MeasurementValue` shape — key + value in `unit`. */
+  values: MeasurementValue[];
+}
+
+/**
  * One ordered line. `productId` is retained for navigation/analytics
  * (products are archived, never hard-deleted), but the snapshot fields
  * make the line historically self-sufficient: name, slug and the exact
@@ -432,13 +467,11 @@ export interface OrderAddressSnapshot {
  * ride over from the cart line — an order must never silently lose
  * configuration data.
  *
- * Phase 7A validates the stitching configuration inside the order
- * transaction and snapshots the measurement profile LABEL alongside the
- * reference, so the historical order stays readable even after the
- * profile is renamed or archived. Phase 7B must additionally snapshot
- * the measurement VALUES at order time (see docs/phase-7a-stitching.md)
- * — a profile is mutable and the values the studio stitches against must
- * be the values the customer ordered with.
+ * Stitched lines carry the full measurement history (Phase 7A label +
+ * Phase 7B `measurements` snapshot); orders placed before Phase 7B may
+ * lack `measurements`, and readers must treat that honestly as
+ * "snapshot unavailable" rather than substituting the profile's CURRENT
+ * values.
  */
 export interface OrderItem {
   id: ID;
@@ -456,6 +489,8 @@ export interface OrderItem {
     measurementProfileId?: ID;
     /** Label snapshot taken at order time (Phase 7A). */
     measurementProfileLabel?: string;
+    /** Order-time measurement snapshot (Phase 7B). */
+    measurements?: OrderItemMeasurementSnapshot;
   };
   customizationRequestId?: ID;
   notes?: string;

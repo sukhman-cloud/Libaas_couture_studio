@@ -7,6 +7,7 @@ import type {
   Category,
   Collection,
   CustomerProfile,
+  CustomizationRequest,
   ID,
   MeasurementProfile,
   MediaAsset,
@@ -41,7 +42,7 @@ import { withLock } from "@/server/lock";
  */
 
 /** Bump when the persisted shape changes; add a step to `migrateStore`. */
-export const STORE_VERSION = 4;
+export const STORE_VERSION = 5;
 
 export interface DataStore {
   version: number;
@@ -58,6 +59,7 @@ export interface DataStore {
   passwordResetTokens: PasswordResetToken[];
   carts: Cart[];
   wishlists: Wishlist[];
+  customizationRequests: CustomizationRequest[];
 }
 
 export function emptyStore(): DataStore {
@@ -76,6 +78,7 @@ export function emptyStore(): DataStore {
     passwordResetTokens: [],
     carts: [],
     wishlists: [],
+    customizationRequests: [],
   };
 }
 
@@ -102,6 +105,7 @@ const STORE_COLLECTION_KEYS = [
   "passwordResetTokens",
   "carts",
   "wishlists",
+  "customizationRequests",
 ] as const;
 
 export function migrateStore(raw: unknown): DataStore | null {
@@ -200,6 +204,10 @@ export function migrateStore(raw: unknown): DataStore | null {
       >,
     );
   }
+
+  // v4 → v5: customizationRequests introduced (Phase 7B foundation).
+  // Nothing to convert — emptyStore() supplies the empty collection and
+  // every existing record carries over untouched.
 
   store.version = STORE_VERSION;
   return store;
@@ -589,6 +597,27 @@ function buildStoreRepositories(
       },
       async update(wishlist) {
         return replace(store.wishlists, wishlist, "Wishlist");
+      },
+    },
+
+    customizationRequests: {
+      async getById(id) {
+        return store.customizationRequests.find((r) => r.id === id) ?? null;
+      },
+      async listByUserId(userId) {
+        return store.customizationRequests
+          .filter((r) => r.userId === userId)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      },
+      async create(request) {
+        return insert(store.customizationRequests, request);
+      },
+      async update(request) {
+        return replace(
+          store.customizationRequests,
+          request,
+          "Customization request",
+        );
       },
     },
 

@@ -7,6 +7,7 @@ import type {
   Category,
   Collection,
   CustomerProfile,
+  CustomizationRequest,
   ID,
   MeasurementProfile,
   MediaAsset,
@@ -267,6 +268,17 @@ export interface PasswordResetTokenRepository {
   markUsed(id: ID): Promise<void>;
 }
 
+/* ── Customization foundation (Phase 7B) ────────────────────────── */
+
+export interface CustomizationRequestRepository {
+  /** Any row by id — callers verify `userId` ownership themselves. */
+  getById(id: ID): Promise<CustomizationRequest | null>;
+  /** A user's requests, newest first. */
+  listByUserId(userId: ID): Promise<CustomizationRequest[]>;
+  create(request: CustomizationRequest): Promise<CustomizationRequest>;
+  update(request: CustomizationRequest): Promise<CustomizationRequest>;
+}
+
 /**
  * The data-access surface. Everything an operation can read or write.
  * A transaction callback receives exactly this — no nested transactions.
@@ -285,6 +297,7 @@ export interface StoreRepositories {
   passwordResetTokens: PasswordResetTokenRepository;
   carts: CartRepository;
   wishlists: WishlistRepository;
+  customizationRequests: CustomizationRequestRepository;
 }
 
 export interface Repositories extends StoreRepositories {

@@ -28,6 +28,7 @@ import {
   collectionColumns,
   collectionLinkRows,
   credentialColumns,
+  customizationRequestColumns,
   MEASUREMENT_INCLUDE,
   measurementColumns,
   measurementValueRows,
@@ -44,6 +45,7 @@ import {
   toCollection,
   toCredential,
   toCustomerProfile,
+  toCustomizationRequest,
   toMeasurementProfile,
   toMediaAsset,
   toProduct,
@@ -766,6 +768,41 @@ function buildPostgresRepositories(db: Db): StoreRepositories {
           });
         });
         return toWishlist(row);
+      },
+    },
+
+    /* ── customization requests (Phase 7B foundation) ─────────────── */
+
+    customizationRequests: {
+      async getById(id) {
+        const row = await db.customizationRequest.findUnique({ where: { id } });
+        return row ? toCustomizationRequest(row) : null;
+      },
+      async listByUserId(userId) {
+        const rows = await db.customizationRequest.findMany({
+          where: { userId },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        });
+        return rows.map(toCustomizationRequest);
+      },
+      async create(request) {
+        return toCustomizationRequest(
+          await db.customizationRequest.create({
+            data: customizationRequestColumns(request),
+          }),
+        );
+      },
+      async update(request) {
+        return toCustomizationRequest(
+          await orNotFound(
+            db.customizationRequest.update({
+              where: { id: request.id },
+              data: customizationRequestColumns(request),
+            }),
+            "Customization request",
+            request.id,
+          ),
+        );
       },
     },
 

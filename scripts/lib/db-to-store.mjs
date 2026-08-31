@@ -1,5 +1,5 @@
 /**
- * Reconstruct a version-4 JSON store object from a PostgreSQL database.
+ * Reconstruct a current-version (v5) JSON store object from a PostgreSQL database.
  *
  * Used by scripts/verify-migration.mjs (to compare the database against the
  * JSON source, entity by entity) and scripts/export-postgres-store.mjs (the
@@ -49,6 +49,7 @@ export async function reconstructStore(prisma) {
     carts,
     wishlists,
     orders,
+    customizationRequests,
   ] = await Promise.all([
     prisma.user.findMany(byCreatedThenId),
     prisma.authCredential.findMany(byCreatedThenId),
@@ -84,10 +85,11 @@ export async function reconstructStore(prisma) {
       ...byCreatedThenId,
       include: { items: { orderBy: { position: "asc" } } },
     }),
+    prisma.customizationRequest.findMany(byCreatedThenId),
   ]);
 
   return {
-    version: 4,
+    version: 5,
     products: products.map((row) => {
       const attributes = {};
       opt(attributes, "fabric", row.fabric);
@@ -225,6 +227,17 @@ export async function reconstructStore(prisma) {
     }),
     appointments: [],
 
+    customizationRequests: customizationRequests.map((row) => {
+      const request = { id: row.id, userId: row.userId };
+      opt(request, "productId", row.productId);
+      opt(request, "measurementProfileId", row.measurementProfileId);
+      request.details = row.details;
+      request.status = row.status;
+      request.createdAt = iso(row.createdAt);
+      request.updatedAt = iso(row.updatedAt);
+      return request;
+    }),
+
     users: users.map((row) => {
       const user = { id: row.id, kind: row.kind, name: row.name };
       opt(user, "email", row.email);
@@ -357,6 +370,7 @@ export async function countAll(prisma) {
     wishlistItems,
     orders,
     orderItems,
+    customizationRequests,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.authCredential.count(),
@@ -378,6 +392,7 @@ export async function countAll(prisma) {
     prisma.wishlistItem.count(),
     prisma.order.count(),
     prisma.orderItem.count(),
+    prisma.customizationRequest.count(),
   ]);
   return {
     users,
@@ -400,5 +415,6 @@ export async function countAll(prisma) {
     wishlistItems,
     orders,
     orderItems,
+    customizationRequests,
   };
 }
