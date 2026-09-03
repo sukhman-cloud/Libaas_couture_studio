@@ -12,6 +12,8 @@ import type {
   MeasurementProfile,
   MediaAsset,
   Order,
+  OrderActivity,
+  OrderNote,
   PasswordResetToken,
   Product,
   User,
@@ -43,7 +45,7 @@ import { withLock } from "@/server/lock";
  */
 
 /** Bump when the persisted shape changes; add a step to `migrateStore`. */
-export const STORE_VERSION = 5;
+export const STORE_VERSION = 6;
 
 export interface DataStore {
   version: number;
@@ -61,6 +63,8 @@ export interface DataStore {
   carts: Cart[];
   wishlists: Wishlist[];
   customizationRequests: CustomizationRequest[];
+  orderActivities: OrderActivity[];
+  orderNotes: OrderNote[];
 }
 
 export function emptyStore(): DataStore {
@@ -80,6 +84,8 @@ export function emptyStore(): DataStore {
     carts: [],
     wishlists: [],
     customizationRequests: [],
+    orderActivities: [],
+    orderNotes: [],
   };
 }
 
@@ -107,6 +113,8 @@ const STORE_COLLECTION_KEYS = [
   "carts",
   "wishlists",
   "customizationRequests",
+  "orderActivities",
+  "orderNotes",
 ] as const;
 
 export function migrateStore(raw: unknown): DataStore | null {
@@ -209,6 +217,10 @@ export function migrateStore(raw: unknown): DataStore | null {
   // v4 → v5: customizationRequests introduced (Phase 7B foundation).
   // Nothing to convert — emptyStore() supplies the empty collection and
   // every existing record carries over untouched.
+
+  // v5 → v6: append-only order activity and private note collections.
+  // Nothing to convert — emptyStore() supplies both collections and all
+  // existing orders remain valid historical records.
 
   store.version = STORE_VERSION;
   return store;
@@ -482,6 +494,41 @@ function buildStoreRepositories(
           counts[order.status] = (counts[order.status] ?? 0) + 1;
         }
         return counts;
+      },
+      async transitionStatus(orderId, expectedStatus, nextStatus, updatedAt) {
+        return guard(async () => {
+          const order = store.orders.find((candidate) => candidate.id === orderId);
+          if (!order || order.status !== expectedStatus) return null;
+          order.status = nextStatus;
+          order.updatedAt = updatedAt;
+          return order;
+        });
+      },
+    },
+
+    orderActivities: {
+      async listByOrderId(orderId) {
+        return store.orderActivities
+          .filter((activity) => activity.orderId === orderId)
+          .sort((a, b) =>
+            a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+          );
+      },
+      async create(activity) {
+        return insert(store.orderActivities, activity);
+      },
+    },
+
+    orderNotes: {
+      async listByOrderId(orderId) {
+        return store.orderNotes
+          .filter((note) => note.orderId === orderId)
+          .sort((a, b) =>
+            a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+          );
+      },
+      async create(note) {
+        return insert(store.orderNotes, note);
       },
     },
 

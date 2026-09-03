@@ -12,7 +12,9 @@ import type {
   MeasurementProfile,
   MediaAsset,
   Order,
+  OrderActivity,
   OrderItem,
+  OrderNote,
   PasswordResetToken,
   Product,
   ProductAttributes,
@@ -116,6 +118,36 @@ export const CART_INCLUDE = {
 export const ORDER_INCLUDE = {
   items: { orderBy: { position: "asc" } },
 } satisfies Prisma.OrderInclude;
+
+export function toOrderActivity(
+  row: Prisma.OrderActivityGetPayload<object>,
+): OrderActivity {
+  return {
+    id: row.id,
+    orderId: row.orderId,
+    type: row.type as OrderActivity["type"],
+    ...opt("actorUserId", row.actorUserId),
+    ...opt("fromStatus", row.fromStatus),
+    ...opt("toStatus", row.toStatus),
+    ...(row.metadata === null
+      ? {}
+      : { metadata: row.metadata as OrderActivity["metadata"] }),
+    createdAt: iso(row.createdAt),
+  };
+}
+
+export function toOrderNote(
+  row: Prisma.OrderNoteGetPayload<object>,
+): OrderNote {
+  return {
+    id: row.id,
+    orderId: row.orderId,
+    ...opt("authorUserId", row.authorUserId),
+    authorName: row.authorName,
+    body: row.body,
+    createdAt: iso(row.createdAt),
+  };
+}
 
 export const WISHLIST_INCLUDE = {
   items: { orderBy: { position: "asc" } },

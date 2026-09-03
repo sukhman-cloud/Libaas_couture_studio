@@ -50,6 +50,8 @@ export async function reconstructStore(prisma) {
     wishlists,
     orders,
     customizationRequests,
+    orderActivities,
+    orderNotes,
   ] = await Promise.all([
     prisma.user.findMany(byCreatedThenId),
     prisma.authCredential.findMany(byCreatedThenId),
@@ -86,10 +88,12 @@ export async function reconstructStore(prisma) {
       include: { items: { orderBy: { position: "asc" } } },
     }),
     prisma.customizationRequest.findMany(byCreatedThenId),
+    prisma.orderActivity.findMany(byCreatedThenId),
+    prisma.orderNote.findMany(byCreatedThenId),
   ]);
 
   return {
-    version: 5,
+    version: 6,
     products: products.map((row) => {
       const attributes = {};
       opt(attributes, "fabric", row.fabric);
@@ -238,6 +242,29 @@ export async function reconstructStore(prisma) {
       return request;
     }),
 
+    orderActivities: orderActivities.map((row) => {
+      const activity = {
+        id: row.id,
+        orderId: row.orderId,
+        type: row.type,
+        createdAt: iso(row.createdAt),
+      };
+      opt(activity, "actorUserId", row.actorUserId);
+      opt(activity, "fromStatus", row.fromStatus);
+      opt(activity, "toStatus", row.toStatus);
+      opt(activity, "metadata", row.metadata);
+      return activity;
+    }),
+
+    orderNotes: orderNotes.map((row) => ({
+      id: row.id,
+      orderId: row.orderId,
+      ...(row.authorUserId ? { authorUserId: row.authorUserId } : {}),
+      authorName: row.authorName,
+      body: row.body,
+      createdAt: iso(row.createdAt),
+    })),
+
     users: users.map((row) => {
       const user = { id: row.id, kind: row.kind, name: row.name };
       opt(user, "email", row.email);
@@ -371,6 +398,8 @@ export async function countAll(prisma) {
     orders,
     orderItems,
     customizationRequests,
+    orderActivities,
+    orderNotes,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.authCredential.count(),
@@ -393,6 +422,8 @@ export async function countAll(prisma) {
     prisma.order.count(),
     prisma.orderItem.count(),
     prisma.customizationRequest.count(),
+    prisma.orderActivity.count(),
+    prisma.orderNote.count(),
   ]);
   return {
     users,
@@ -416,5 +447,7 @@ export async function countAll(prisma) {
     orders,
     orderItems,
     customizationRequests,
+    orderActivities,
+    orderNotes,
   };
 }

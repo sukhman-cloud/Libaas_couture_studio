@@ -410,7 +410,39 @@ export interface Wishlist extends Timestamps {
  * stitching (7), shipping/delivery, and cancellation. Extending a union
  * member list is additive and breaks nothing.
  */
-export type OrderStatus = "pending";
+export type OrderStatus =
+  | "pending"
+  | "confirmed"
+  | "processing"
+  | "ready"
+  | "completed"
+  | "cancelled";
+
+export type OrderActivityType =
+  | "order_created"
+  | "status_changed"
+  | "order_cancelled"
+  | "internal_note_added";
+
+export interface OrderActivity {
+  id: ID;
+  orderId: ID;
+  type: OrderActivityType;
+  actorUserId?: ID;
+  fromStatus?: OrderStatus;
+  toStatus?: OrderStatus;
+  metadata?: Record<string, string | number | boolean | null>;
+  createdAt: ISODateTime;
+}
+
+export interface OrderNote {
+  id: ID;
+  orderId: ID;
+  authorUserId?: ID;
+  authorName: string;
+  body: string;
+  createdAt: ISODateTime;
+}
 
 /**
  * Customer identity AS IT WAS at the moment of purchase. Orders are

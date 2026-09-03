@@ -62,6 +62,8 @@ const COLLECTIONS = [
   "orders",
   "appointments",
   "customizationRequests",
+  "orderActivities",
+  "orderNotes",
 ];
 
 for (const key of COLLECTIONS) {
@@ -316,6 +318,14 @@ for (const measurement of measurements) {
 /* ── catalog ────────────────────────────────────────────────────── */
 
 const STATUSES = new Set(["draft", "published", "archived"]);
+const ORDER_STATUSES = new Set([
+  "pending",
+  "confirmed",
+  "processing",
+  "ready",
+  "completed",
+  "cancelled",
+]);
 const AVAILABILITIES = new Set(["available", "made_to_order", "out_of_stock", "discontinued"]);
 
 for (const category of categories) {
@@ -559,6 +569,9 @@ checkDuplicates(
 );
 for (const order of orders) {
   checkOwner(order, "Order");
+  if (!ORDER_STATUSES.has(order.status)) {
+    problem("shape", `Order ${order.id}: unknown status "${order.status}".`);
+  }
   checkMoney(order.subtotal, `Order ${order.id} subtotal`);
   checkMoney(order.shippingAmount, `Order ${order.id} shippingAmount`);
   checkMoney(order.taxAmount, `Order ${order.id} taxAmount`);
@@ -589,6 +602,29 @@ for (const order of orders) {
       problem("orphan", `Order ${order.id} item ${item.id} references missing product ${item.productId}.`);
     }
   }
+}
+
+const orderIds = new Set(orders.map((order) => order.id));
+const orderActivities = rows("orderActivities");
+const orderNotes = rows("orderNotes");
+checkIds(orderActivities, "orderActivities");
+checkIds(orderNotes, "orderNotes");
+checkTimestamps(orderActivities, "orderActivity", { requireUpdated: false });
+checkTimestamps(orderNotes, "orderNote", { requireUpdated: false });
+for (const activity of orderActivities) {
+  if (!orderIds.has(activity.orderId)) problem("orphan", `OrderActivity ${activity.id} references missing order ${activity.orderId}.`);
+  if (!["order_created", "status_changed", "order_cancelled", "internal_note_added"].includes(activity.type)) {
+    problem("shape", `OrderActivity ${activity.id}: unknown type "${activity.type}".`);
+  }
+  if (activity.fromStatus && !ORDER_STATUSES.has(activity.fromStatus)) problem("shape", `OrderActivity ${activity.id}: invalid fromStatus.`);
+  if (activity.toStatus && !ORDER_STATUSES.has(activity.toStatus)) problem("shape", `OrderActivity ${activity.id}: invalid toStatus.`);
+  if (activity.actorUserId && !userIds.has(activity.actorUserId)) problem("orphan", `OrderActivity ${activity.id} references missing actor ${activity.actorUserId}.`);
+}
+for (const note of orderNotes) {
+  if (!orderIds.has(note.orderId)) problem("orphan", `OrderNote ${note.id} references missing order ${note.orderId}.`);
+  if (typeof note.authorName !== "string" || !note.authorName.trim()) problem("shape", `OrderNote ${note.id}: authorName is missing.`);
+  if (typeof note.body !== "string" || !note.body.trim() || note.body.length > 2000) problem("shape", `OrderNote ${note.id}: body is empty or over 2000 chars.`);
+  if (note.authorUserId && !userIds.has(note.authorUserId)) problem("orphan", `OrderNote ${note.id} references missing author ${note.authorUserId}.`);
 }
 
 /* ── customization requests (Phase 7B foundation) ───────────────── */

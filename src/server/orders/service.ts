@@ -450,6 +450,12 @@ export async function createOrderFromCheckout(input: {
 
       /* 7. write order + items, then clear the cart — same unit. */
       const created = await tx.orders.create(order);
+      await tx.orderActivities.create({
+        id: randomUUID(),
+        orderId: order.id,
+        type: "order_created",
+        createdAt: now,
+      });
       await tx.carts.update({ ...cart, items: [], updatedAt: now });
 
       return { outcome: "created", order: toPlacedView(created) };

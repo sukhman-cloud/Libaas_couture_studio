@@ -1,6 +1,7 @@
 import "server-only";
+import { randomUUID } from "crypto";
 import { redirect } from "next/navigation";
-import { requireAdminSession } from "@/lib/auth/admin-guard";
+import { authorizeAdmin, requireAdminSession } from "@/lib/auth/admin-guard";
 import { hasPermission } from "@/lib/auth/roles";
 import { getRepositories } from "@/server/data";
 import type { OrderSort } from "@/server/data/repositories";
@@ -9,7 +10,17 @@ import {
   isOrderNumber,
   type CustomerOrderItemView,
 } from "@/server/orders/service";
-import type { Money, Order, OrderAddressSnapshot } from "@/types/domain";
+import type {
+  Money,
+  Order,
+  OrderActivity,
+  OrderAddressSnapshot,
+  OrderStatus,
+} from "@/types/domain";
+import {
+  isAllowedStatusTransition,
+  ORDER_STATUSES,
+} from "@/server/orders/workflow";
 
 /**
  * Admin order reading (Phase 7C) — the studio's fulfillment view.
@@ -28,9 +39,9 @@ import type { Money, Order, OrderAddressSnapshot } from "@/types/domain";
  */
 
 const ORDER_SORTS: OrderSort[] = ["newest", "oldest", "total_desc", "total_asc"];
-const ORDER_STATUSES: Array<Order["status"]> = ["pending"];
 export const ADMIN_ORDERS_PER_PAGE = 20;
 export const ADMIN_SEARCH_MAX = 80;
+export const ADMIN_NOTE_MAX = 2000;
 
 async function requireOrdersRead() {
   const session = await requireAdminSession();
@@ -71,7 +82,27 @@ export interface AdminOrderList {
   totalOrders: number;
 }
 
-export type AdminOrderItemView = CustomerOrderItemView;
+export interface AdminOrderItemView extends CustomerOrderItemView {
+  customization?: {
+    status: string;
+    details: string;
+    createdAt: string;
+  };
+}
+
+export interface AdminOrderActivityView {
+  type: OrderActivity["type"];
+  fromStatus?: OrderStatus;
+  toStatus?: OrderStatus;
+  actorName: string;
+  createdAt: string;
+}
+
+export interface AdminOrderNoteView {
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
 
 export interface AdminOrderDetail {
   orderNumber: string;
@@ -88,6 +119,43 @@ export interface AdminOrderDetail {
   total: Money;
   itemCount: number;
   totalQuantity: number;
+  activities: AdminOrderActivityView[];
+  notes: AdminOrderNoteView[];
+}
+
+async function buildAdminItemViews(order: Order): Promise<AdminOrderItemView[]> {
+  const baseItems = await buildOrderItemViews(order);
+  return Promise.all(
+    order.items.map(async (item, index) => {
+      const request = item.customizationRequestId
+        ? await getRepositories().customizationRequests.getById(
+            item.customizationRequestId,
+          )
+        : null;
+      return {
+        ...baseItems[index],
+        ...(request
+          ? {
+              customization: {
+                status: request.status,
+                details: request.details,
+                createdAt: request.createdAt,
+              },
+            }
+          : {}),
+      };
+    }),
+  );
+}
+
+function activityView(activity: OrderActivity): AdminOrderActivityView {
+  return {
+    type: activity.type,
+    ...(activity.fromStatus ? { fromStatus: activity.fromStatus } : {}),
+    ...(activity.toStatus ? { toStatus: activity.toStatus } : {}),
+    actorName: activity.actorUserId ?? "System",
+    createdAt: activity.createdAt,
+  };
 }
 
 /* ── queries ────────────────────────────────────────────────────── */
@@ -175,6 +243,11 @@ export async function getAdminOrderByNumber(
   if (!isOrderNumber(orderNumber)) return null;
   const order = await getRepositories().orders.getByOrderNumber(orderNumber);
   if (!order) return null;
+  const [items, activities, notes] = await Promise.all([
+    buildAdminItemViews(order),
+    getRepositories().orderActivities.listByOrderId(order.id),
+    getRepositories().orderNotes.listByOrderId(order.id),
+  ]);
 
   return {
     orderNumber: order.orderNumber,
@@ -182,7 +255,7 @@ export async function getAdminOrderByNumber(
     status: order.status,
     customer: order.customer,
     shippingAddress: order.shippingAddress,
-    items: await buildOrderItemViews(order),
+    items,
     currency: order.currency,
     subtotal: order.subtotal,
     shippingAmount: order.shippingAmount,
@@ -191,5 +264,104 @@ export async function getAdminOrderByNumber(
     total: order.total,
     itemCount: order.items.length,
     totalQuantity: order.items.reduce((sum, i) => sum + i.quantity, 0),
+    activities: activities.map(activityView),
+    notes: notes.map((note) => ({
+      authorName: note.authorName,
+      body: note.body,
+      createdAt: note.createdAt,
+    })),
   };
+}
+
+export type AdminOrderMutationResult =
+  | { ok: true; status?: OrderStatus }
+  | { ok: false; error: string };
+
+export async function transitionAdminOrder(
+  orderNumber: string,
+  nextStatus: string,
+): Promise<AdminOrderMutationResult> {
+  const auth = await authorizeAdmin("orders.write");
+  if (!auth.ok) return { ok: false, error: auth.error };
+  if (!isOrderNumber(orderNumber)) return { ok: false, error: "Order not found." };
+  if (!ORDER_STATUSES.includes(nextStatus as OrderStatus)) {
+    return { ok: false, error: "That order status is not available." };
+  }
+
+  try {
+    await getRepositories().transaction(async (tx) => {
+      const order = await tx.orders.getByOrderNumber(orderNumber);
+      if (!order) throw new Error("Order not found.");
+      if (!isAllowedStatusTransition(order.status, nextStatus as OrderStatus)) {
+        throw new Error("That status transition is not allowed.");
+      }
+      const now = new Date().toISOString();
+      const updated = await tx.orders.transitionStatus(
+        order.id,
+        order.status,
+        nextStatus as OrderStatus,
+        now,
+      );
+      if (!updated) throw new Error("This order changed. Refresh and try again.");
+      await tx.orderActivities.create({
+        id: randomUUID(),
+        orderId: order.id,
+        type: nextStatus === "cancelled" ? "order_cancelled" : "status_changed",
+        actorUserId: auth.session.sub === "dev-admin" ? undefined : auth.session.sub,
+        fromStatus: order.status,
+        toStatus: nextStatus as OrderStatus,
+        createdAt: now,
+      });
+    });
+    return { ok: true, status: nextStatus as OrderStatus };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Could not update the order.",
+    };
+  }
+}
+
+export async function addAdminOrderNote(
+  orderNumber: string,
+  body: string,
+): Promise<AdminOrderMutationResult> {
+  const auth = await authorizeAdmin("orders.write");
+  if (!auth.ok) return { ok: false, error: auth.error };
+  if (!isOrderNumber(orderNumber)) return { ok: false, error: "Order not found." };
+  const noteBody = body.trim();
+  if (!noteBody) return { ok: false, error: "Note cannot be empty." };
+  if (noteBody.length > ADMIN_NOTE_MAX) {
+    return { ok: false, error: `Keep notes within ${ADMIN_NOTE_MAX} characters.` };
+  }
+
+  try {
+    await getRepositories().transaction(async (tx) => {
+      const order = await tx.orders.getByOrderNumber(orderNumber);
+      if (!order) throw new Error("Order not found.");
+      const now = new Date().toISOString();
+      await tx.orderNotes.create({
+        id: randomUUID(),
+        orderId: order.id,
+        authorUserId: auth.session.sub === "dev-admin" ? undefined : auth.session.sub,
+        authorName: "Studio admin",
+        body: noteBody,
+        createdAt: now,
+      });
+      await tx.orderActivities.create({
+        id: randomUUID(),
+        orderId: order.id,
+        type: "internal_note_added",
+        actorUserId: auth.session.sub === "dev-admin" ? undefined : auth.session.sub,
+        metadata: { characters: noteBody.length },
+        createdAt: now,
+      });
+    });
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Could not save the note.",
+    };
+  }
 }

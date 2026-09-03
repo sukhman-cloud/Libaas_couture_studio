@@ -3,8 +3,8 @@
 Phase 7C is the first real consumer of the Order system: customers can
 read their own order history and detail, and the studio can search,
 filter, sort and open orders for fulfilment — including the Phase 7B
-measurement snapshot. **Read and display only**: no status workflow
-exists yet, so nothing on these pages mutates an order.
+measurement snapshot. At the time of Phase 7C this was read and display
+only; Phase 8 adds the controlled admin status workflow.
 
 ---
 
@@ -93,12 +93,9 @@ across 12 simultaneous reads racing a profile edit.
 
 ## 6. Status (§28/§29 — documented decision)
 
-`OrderStatus` holds the single value `pending`, rendered as **Pending**
-through one badge mapping (`OrderStatusBadge`). No admin status
-mutation was added: no business workflow defines transitions yet, so
-orders stay immutable after creation. The status filter offers exactly
-what exists. The workflow phase adds transitions and the badge entries
-together.
+Phase 7C originally rendered the then-current `pending` status through one
+badge mapping (`OrderStatusBadge`) and added no mutation. Phase 8 extends
+the vocabulary and supplies the controlled transition workflow.
 
 ## 7. Customization references (§26)
 

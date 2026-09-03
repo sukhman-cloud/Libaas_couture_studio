@@ -93,6 +93,11 @@ enum FitPreference {
 /// extend this enum additively via their own migrations.
 enum OrderStatus {
   pending
+  confirmed
+  processing
+  ready
+  completed
+  cancelled
 
   @@map("order_status")
 }
@@ -117,6 +122,8 @@ model User {
   wishlist              Wishlist?
   orders                Order[]
   customizationRequests CustomizationRequest[]
+  orderActivities       OrderActivity[]        @relation("OrderActivityActor")
+  orderNotes            OrderNote[]            @relation("OrderNoteAuthor")
 
   @@map("users")
 }
@@ -392,10 +399,10 @@ model Product {
   createdAt  DateTime  @map("created_at")
   updatedAt  DateTime  @map("updated_at")
 
-  category            Category?                  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  secondaryCategories ProductSecondaryCategory[]
-  collections         ProductCollection[]
-  media               ProductMedia[]
+  category              Category?                  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  secondaryCategories   ProductSecondaryCategory[]
+  collections           ProductCollection[]
+  media                 ProductMedia[]
   cartItems             CartItem[]
   wishlistItems         WishlistItem[]
   orderItems            OrderItem[]
@@ -560,12 +567,12 @@ model Order {
   userId String      @map("user_id")
   status OrderStatus
 
-  currency        String
-  subtotalAmount  BigInt @map("subtotal_amount")
-  shippingAmount  BigInt @map("shipping_amount")
-  taxAmount       BigInt @map("tax_amount")
-  discountAmount  BigInt @map("discount_amount")
-  totalAmount     BigInt @map("total_amount")
+  currency       String
+  subtotalAmount BigInt @map("subtotal_amount")
+  shippingAmount BigInt @map("shipping_amount")
+  taxAmount      BigInt @map("tax_amount")
+  discountAmount BigInt @map("discount_amount")
+  totalAmount    BigInt @map("total_amount")
 
   // Customer snapshot at purchase time.
   customerName  String  @map("customer_name")
@@ -593,8 +600,10 @@ model Order {
   createdAt DateTime @map("created_at")
   updatedAt DateTime @map("updated_at")
 
-  user  User        @relation(fields: [userId], references: [id], onDelete: Restrict)
-  items OrderItem[]
+  user       User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  items      OrderItem[]
+  activities OrderActivity[]
+  notes      OrderNote[]
 
   @@unique([userId, idempotencyKey])
   @@index([userId])
@@ -634,4 +643,39 @@ model OrderItem {
   @@index([orderId])
   @@index([productId])
   @@map("order_items")
+}
+
+/// Append-only operational history. Order snapshots remain immutable; this
+/// records the workflow around them.
+model OrderActivity {
+  id          String       @id
+  orderId     String       @map("order_id")
+  type        String
+  actorUserId String?      @map("actor_user_id")
+  fromStatus  OrderStatus? @map("from_status")
+  toStatus    OrderStatus? @map("to_status")
+  metadata    Json?
+  createdAt   DateTime     @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  actor User? @relation("OrderActivityActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([orderId, createdAt])
+  @@map("order_activities")
+}
+
+/// Private, append-only studio notes. Never included in customer view models.
+model OrderNote {
+  id           String   @id
+  orderId      String   @map("order_id")
+  authorUserId String?  @map("author_user_id")
+  authorName   String   @map("author_name")
+  body         String
+  createdAt    DateTime @map("created_at")
+
+  order  Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  author User? @relation("OrderNoteAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  @@index([orderId, createdAt])
+  @@map("order_notes")
 }

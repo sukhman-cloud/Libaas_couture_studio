@@ -122,6 +122,8 @@ const plannedCounts = {
     0,
   ),
   customizationRequests: source.customizationRequests?.length ?? 0,
+  orderActivities: source.orderActivities?.length ?? 0,
+  orderNotes: source.orderNotes?.length ?? 0,
 };
 for (const [table, expected] of Object.entries(plannedCounts)) {
   if (dbCounts[table] === expected) {
@@ -147,6 +149,8 @@ const ENTITY_COLLECTIONS = [
   "wishlists",
   "orders",
   "customizationRequests",
+  "orderActivities",
+  "orderNotes",
 ];
 
 for (const collection of ENTITY_COLLECTIONS) {

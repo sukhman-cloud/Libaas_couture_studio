@@ -23,6 +23,8 @@ import {
   orderColumns,
   orderItemRows,
   toOrder,
+  toOrderActivity,
+  toOrderNote,
   cartColumns,
   cartItemRows,
   categoryColumns,
@@ -483,6 +485,67 @@ function buildPostgresRepositories(db: Db): StoreRepositories {
         const counts: Record<string, number> = {};
         for (const group of groups) counts[group.status] = group._count._all;
         return counts;
+      },
+      async transitionStatus(orderId, expectedStatus, nextStatus, updatedAt) {
+        const result = await db.order.updateMany({
+          where: { id: orderId, status: expectedStatus },
+          data: { status: nextStatus, updatedAt: new Date(updatedAt) },
+        });
+        if (result.count === 0) return null;
+        const row = await db.order.findUniqueOrThrow({
+          ...ATOMIC_READ,
+          where: { id: orderId },
+          include: ORDER_INCLUDE,
+        });
+        return toOrder(row);
+      },
+    },
+
+    orderActivities: {
+      async listByOrderId(orderId) {
+        const rows = await db.orderActivity.findMany({
+          where: { orderId },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        });
+        return rows.map(toOrderActivity);
+      },
+      async create(activity) {
+        const row = await db.orderActivity.create({
+          data: {
+            id: activity.id,
+            orderId: activity.orderId,
+            type: activity.type,
+            actorUserId: activity.actorUserId ?? null,
+            fromStatus: activity.fromStatus ?? null,
+            toStatus: activity.toStatus ?? null,
+            metadata: activity.metadata ?? Prisma.DbNull,
+            createdAt: new Date(activity.createdAt),
+          },
+        });
+        return toOrderActivity(row);
+      },
+    },
+
+    orderNotes: {
+      async listByOrderId(orderId) {
+        const rows = await db.orderNote.findMany({
+          where: { orderId },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        });
+        return rows.map(toOrderNote);
+      },
+      async create(note) {
+        const row = await db.orderNote.create({
+          data: {
+            id: note.id,
+            orderId: note.orderId,
+            authorUserId: note.authorUserId ?? null,
+            authorName: note.authorName,
+            body: note.body,
+            createdAt: new Date(note.createdAt),
+          },
+        });
+        return toOrderNote(row);
       },
     },
 

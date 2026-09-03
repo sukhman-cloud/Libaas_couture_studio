@@ -12,6 +12,9 @@ import type {
   MeasurementProfile,
   MediaAsset,
   Order,
+  OrderActivity,
+  OrderNote,
+  OrderStatus,
   PasswordResetToken,
   Product,
   ProductAvailability,
@@ -215,6 +218,22 @@ export interface OrderRepository {
   create(order: Order): Promise<Order>;
   count(): Promise<number>;
   countByStatus(): Promise<Record<string, number>>;
+  transitionStatus(
+    orderId: ID,
+    expectedStatus: OrderStatus,
+    nextStatus: OrderStatus,
+    updatedAt: string,
+  ): Promise<Order | null>;
+}
+
+export interface OrderActivityRepository {
+  listByOrderId(orderId: ID): Promise<OrderActivity[]>;
+  create(activity: OrderActivity): Promise<OrderActivity>;
+}
+
+export interface OrderNoteRepository {
+  listByOrderId(orderId: ID): Promise<OrderNote[]>;
+  create(note: OrderNote): Promise<OrderNote>;
 }
 
 export interface AppointmentRepository {
@@ -315,6 +334,8 @@ export interface StoreRepositories {
   carts: CartRepository;
   wishlists: WishlistRepository;
   customizationRequests: CustomizationRequestRepository;
+  orderActivities: OrderActivityRepository;
+  orderNotes: OrderNoteRepository;
 }
 
 export interface Repositories extends StoreRepositories {

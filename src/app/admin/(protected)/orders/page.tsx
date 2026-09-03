@@ -20,6 +20,11 @@ export const metadata: Metadata = { title: "Admin · Orders" };
 const statusOptions: Array<{ value: string; label: string }> = [
   { value: "", label: "All statuses" },
   { value: "pending", label: "Pending" },
+  { value: "confirmed", label: "Confirmed" },
+  { value: "processing", label: "Processing" },
+  { value: "ready", label: "Ready" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
 ];
 
 const sortOptions: Array<{ value: OrderSort; label: string }> = [

@@ -117,6 +117,8 @@ const src = {
   wishlists: store.wishlists ?? [],
   orders: store.orders ?? [],
   customizationRequests: store.customizationRequests ?? [],
+  orderActivities: store.orderActivities ?? [],
+  orderNotes: store.orderNotes ?? [],
 };
 
 const planned = {
@@ -153,6 +155,8 @@ const planned = {
   orders: src.orders.length,
   orderItems: src.orders.reduce((n, o) => n + (o.items?.length ?? 0), 0),
   customizationRequests: src.customizationRequests.length,
+  orderActivities: src.orderActivities.length,
+  orderNotes: src.orderNotes.length,
 };
 
 // The PostgreSQL provider looks emails up lowercase and SKUs uppercase
@@ -506,6 +510,29 @@ async function importAll(tx) {
         position,
       })),
     ),
+  });
+
+  await tx.orderActivity.createMany({
+    data: src.orderActivities.map((activity) => ({
+      id: activity.id,
+      orderId: activity.orderId,
+      type: activity.type,
+      actorUserId: activity.actorUserId ?? null,
+      fromStatus: activity.fromStatus ?? null,
+      toStatus: activity.toStatus ?? null,
+      metadata: activity.metadata ?? undefined,
+      createdAt: date(activity.createdAt),
+    })),
+  });
+  await tx.orderNote.createMany({
+    data: src.orderNotes.map((note) => ({
+      id: note.id,
+      orderId: note.orderId,
+      authorUserId: note.authorUserId ?? null,
+      authorName: note.authorName,
+      body: note.body,
+      createdAt: date(note.createdAt),
+    })),
   });
 
   await tx.customizationRequest.createMany({

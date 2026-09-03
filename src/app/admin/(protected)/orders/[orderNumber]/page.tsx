@@ -5,12 +5,14 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ImageOff } from "lucide-react";
 import { OrderItemConfiguration } from "@/components/orders/order-item-configuration";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
+import { OrderOperations } from "@/components/admin/order-operations";
 import { buttonStyles } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { Caption, Heading, Text } from "@/components/ui/typography";
 import { formatPrice } from "@/lib/utils";
 import { getAdminOrderByNumber } from "@/server/orders/admin";
+import { allowedNextStatuses, ORDER_STATUS_LABELS } from "@/server/orders/workflow";
 
 export const metadata: Metadata = { title: "Admin · Order" };
 
@@ -157,6 +159,16 @@ export default async function AdminOrderDetailPage({
                       notes={item.notes}
                       hasCustomizationRequest={item.hasCustomizationRequest}
                     />
+                    {item.customization && (
+                      <div className="rounded-xl bg-cream-50 p-3 text-sm">
+                        <p className="font-medium text-navy-800">
+                          Customization request · {item.customization.status}
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap wrap-break-word text-muted">
+                          {item.customization.details}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </li>
               ))}
@@ -202,6 +214,56 @@ export default async function AdminOrderDetailPage({
             </div>
           </CardContent>
         </Card>
+
+        <OrderOperations
+          orderNumber={order.orderNumber}
+          nextStatuses={allowedNextStatuses(order.status)}
+        />
+
+        {(order.activities.length > 0 || order.notes.length > 0) && (
+          <Card>
+            <CardContent className="space-y-5 p-4 sm:p-5">
+              <Heading level={2} className="text-lg">
+                Order history
+              </Heading>
+              {order.activities.length > 0 && (
+                <ol className="space-y-3 border-l border-cream-200 pl-4">
+                  {order.activities.map((activity, index) => (
+                    <li key={`${activity.createdAt}-${index}`} className="text-sm">
+                      <p className="font-medium text-navy-800">
+                        {activity.type === "order_created"
+                          ? "Order created"
+                          : activity.type === "order_cancelled"
+                            ? "Order cancelled"
+                            : activity.type === "internal_note_added"
+                              ? "Internal note added"
+                              : `Status changed to ${activity.toStatus ? ORDER_STATUS_LABELS[activity.toStatus] : "updated"}`}
+                      </p>
+                      <Caption className="block">
+                        {activity.actorName} · {formatDate(activity.createdAt)}
+                      </Caption>
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {order.notes.length > 0 && (
+                <div className="space-y-3 border-t border-cream-200 pt-4">
+                  <Heading level={3} className="text-base">
+                    Internal notes
+                  </Heading>
+                  {order.notes.map((note, index) => (
+                    <div key={`${note.createdAt}-${index}`} className="rounded-xl bg-cream-50 p-3 text-sm">
+                      <p className="whitespace-pre-wrap wrap-break-word">{note.body}</p>
+                      <Caption className="mt-1 block">
+                        {note.authorName} · {formatDate(note.createdAt)}
+                      </Caption>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <div className="flex flex-wrap gap-3">
           <Link
