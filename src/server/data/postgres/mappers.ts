@@ -9,6 +9,8 @@ import type {
   CustomerAddress,
   CustomerProfile,
   CustomizationRequest,
+  CustomizationActivity,
+  CustomizationNote,
   MeasurementProfile,
   MediaAsset,
   Order,
@@ -252,6 +254,8 @@ export function toCustomizationRequest(
     userId: row.userId,
     ...opt("productId", row.productId),
     ...opt("measurementProfileId", row.measurementProfileId),
+    ...opt("orderId", row.orderId),
+    ...opt("orderItemId", row.orderItemId),
     details: row.details,
     status: row.status,
     createdAt: iso(row.createdAt),
@@ -265,10 +269,35 @@ export function customizationRequestColumns(request: CustomizationRequest) {
     userId: request.userId,
     productId: request.productId ?? null,
     measurementProfileId: request.measurementProfileId ?? null,
+    orderId: request.orderId ?? null,
+    orderItemId: request.orderItemId ?? null,
     details: request.details,
     status: request.status,
     createdAt: new Date(request.createdAt),
     updatedAt: new Date(request.updatedAt),
+  };
+}
+
+export function toCustomizationActivity(row: Prisma.CustomizationActivityGetPayload<object>): CustomizationActivity {
+  return {
+    id: row.id,
+    customizationRequestId: row.customizationRequestId,
+    type: row.type as CustomizationActivity["type"],
+    ...opt("actorUserId", row.actorUserId),
+    ...opt("fromStatus", row.fromStatus),
+    ...opt("toStatus", row.toStatus),
+    createdAt: iso(row.createdAt),
+  };
+}
+
+export function toCustomizationNote(row: Prisma.CustomizationNoteGetPayload<object>): CustomizationNote {
+  return {
+    id: row.id,
+    customizationRequestId: row.customizationRequestId,
+    ...opt("authorUserId", row.authorUserId),
+    authorName: row.authorName,
+    body: row.body,
+    createdAt: iso(row.createdAt),
   };
 }
 

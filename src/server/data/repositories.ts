@@ -15,6 +15,9 @@ import type {
   OrderActivity,
   OrderNote,
   OrderStatus,
+  CustomizationActivity,
+  CustomizationNote,
+  CustomizationStatus,
   PasswordResetToken,
   Product,
   ProductAvailability,
@@ -309,10 +312,22 @@ export interface PasswordResetTokenRepository {
 export interface CustomizationRequestRepository {
   /** Any row by id — callers verify `userId` ownership themselves. */
   getById(id: ID): Promise<CustomizationRequest | null>;
+  list(): Promise<CustomizationRequest[]>;
   /** A user's requests, newest first. */
   listByUserId(userId: ID): Promise<CustomizationRequest[]>;
   create(request: CustomizationRequest): Promise<CustomizationRequest>;
   update(request: CustomizationRequest): Promise<CustomizationRequest>;
+  transitionStatus(id: ID, expected: CustomizationStatus, next: CustomizationStatus, updatedAt: string): Promise<CustomizationRequest | null>;
+}
+
+export interface CustomizationActivityRepository {
+  listByRequestId(requestId: ID): Promise<CustomizationActivity[]>;
+  create(activity: CustomizationActivity): Promise<CustomizationActivity>;
+}
+
+export interface CustomizationNoteRepository {
+  listByRequestId(requestId: ID): Promise<CustomizationNote[]>;
+  create(note: CustomizationNote): Promise<CustomizationNote>;
 }
 
 /**
@@ -334,6 +349,8 @@ export interface StoreRepositories {
   carts: CartRepository;
   wishlists: WishlistRepository;
   customizationRequests: CustomizationRequestRepository;
+  customizationActivities: CustomizationActivityRepository;
+  customizationNotes: CustomizationNoteRepository;
   orderActivities: OrderActivityRepository;
   orderNotes: OrderNoteRepository;
 }

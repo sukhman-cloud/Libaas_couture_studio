@@ -119,6 +119,8 @@ const src = {
   customizationRequests: store.customizationRequests ?? [],
   orderActivities: store.orderActivities ?? [],
   orderNotes: store.orderNotes ?? [],
+  customizationActivities: store.customizationActivities ?? [],
+  customizationNotes: store.customizationNotes ?? [],
 };
 
 const planned = {
@@ -157,6 +159,8 @@ const planned = {
   customizationRequests: src.customizationRequests.length,
   orderActivities: src.orderActivities.length,
   orderNotes: src.orderNotes.length,
+  customizationActivities: src.customizationActivities.length,
+  customizationNotes: src.customizationNotes.length,
 };
 
 // The PostgreSQL provider looks emails up lowercase and SKUs uppercase
@@ -541,10 +545,34 @@ async function importAll(tx) {
       userId: request.userId,
       productId: request.productId ?? null,
       measurementProfileId: request.measurementProfileId ?? null,
+      orderId: request.orderId ?? null,
+      orderItemId: request.orderItemId ?? null,
       details: request.details,
       status: request.status,
       createdAt: new Date(request.createdAt),
       updatedAt: new Date(request.updatedAt),
+    })),
+  });
+
+  await tx.customizationActivity.createMany({
+    data: src.customizationActivities.map((activity) => ({
+      id: activity.id,
+      customizationRequestId: activity.customizationRequestId,
+      type: activity.type,
+      actorUserId: activity.actorUserId ?? null,
+      fromStatus: activity.fromStatus ?? null,
+      toStatus: activity.toStatus ?? null,
+      createdAt: date(activity.createdAt),
+    })),
+  });
+  await tx.customizationNote.createMany({
+    data: src.customizationNotes.map((note) => ({
+      id: note.id,
+      customizationRequestId: note.customizationRequestId,
+      authorUserId: note.authorUserId ?? null,
+      authorName: note.authorName,
+      body: note.body,
+      createdAt: date(note.createdAt),
     })),
   });
 

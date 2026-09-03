@@ -394,6 +394,13 @@ export default async function ProductPage({
               </Text>
               <div className="mt-4 flex flex-wrap gap-3">
                 <Link
+                  href={`/account/customizations/new?product=${encodeURIComponent(product.slug)}`}
+                  className={buttonStyles({ variant: "outline", size: "sm" })}
+                >
+                  <Sparkles className="size-4" aria-hidden />
+                  Request customization
+                </Link>
+                <Link
                   href={siteConfig.social.instagram}
                   target="_blank"
                   rel="noopener noreferrer"

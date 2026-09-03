@@ -49,6 +49,8 @@ import {
   toCredential,
   toCustomerProfile,
   toCustomizationRequest,
+  toCustomizationActivity,
+  toCustomizationNote,
   toMeasurementProfile,
   toMediaAsset,
   toProduct,
@@ -855,6 +857,12 @@ function buildPostgresRepositories(db: Db): StoreRepositories {
         const row = await db.customizationRequest.findUnique({ where: { id } });
         return row ? toCustomizationRequest(row) : null;
       },
+      async list() {
+        const rows = await db.customizationRequest.findMany({
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        });
+        return rows.map(toCustomizationRequest);
+      },
       async listByUserId(userId) {
         const rows = await db.customizationRequest.findMany({
           where: { userId },
@@ -880,6 +888,62 @@ function buildPostgresRepositories(db: Db): StoreRepositories {
             request.id,
           ),
         );
+      },
+      async transitionStatus(id, expected, next, updatedAt) {
+        const result = await db.customizationRequest.updateMany({
+          where: { id, status: expected },
+          data: { status: next, updatedAt: new Date(updatedAt) },
+        });
+        if (result.count === 0) return null;
+        const row = await db.customizationRequest.findUniqueOrThrow({ where: { id } });
+        return toCustomizationRequest(row);
+      },
+    },
+
+    customizationActivities: {
+      async listByRequestId(customizationRequestId) {
+        const rows = await db.customizationActivity.findMany({
+          where: { customizationRequestId },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        });
+        return rows.map(toCustomizationActivity);
+      },
+      async create(activity) {
+        const row = await db.customizationActivity.create({
+          data: {
+            id: activity.id,
+            customizationRequestId: activity.customizationRequestId,
+            type: activity.type,
+            actorUserId: activity.actorUserId ?? null,
+            fromStatus: activity.fromStatus ?? null,
+            toStatus: activity.toStatus ?? null,
+            createdAt: new Date(activity.createdAt),
+          },
+        });
+        return toCustomizationActivity(row);
+      },
+    },
+
+    customizationNotes: {
+      async listByRequestId(customizationRequestId) {
+        const rows = await db.customizationNote.findMany({
+          where: { customizationRequestId },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        });
+        return rows.map(toCustomizationNote);
+      },
+      async create(note) {
+        const row = await db.customizationNote.create({
+          data: {
+            id: note.id,
+            customizationRequestId: note.customizationRequestId,
+            authorUserId: note.authorUserId ?? null,
+            authorName: note.authorName,
+            body: note.body,
+            createdAt: new Date(note.createdAt),
+          },
+        });
+        return toCustomizationNote(row);
       },
     },
 

@@ -52,6 +52,8 @@ export async function reconstructStore(prisma) {
     customizationRequests,
     orderActivities,
     orderNotes,
+    customizationActivities,
+    customizationNotes,
   ] = await Promise.all([
     prisma.user.findMany(byCreatedThenId),
     prisma.authCredential.findMany(byCreatedThenId),
@@ -90,10 +92,12 @@ export async function reconstructStore(prisma) {
     prisma.customizationRequest.findMany(byCreatedThenId),
     prisma.orderActivity.findMany(byCreatedThenId),
     prisma.orderNote.findMany(byCreatedThenId),
+    prisma.customizationActivity.findMany(byCreatedThenId),
+    prisma.customizationNote.findMany(byCreatedThenId),
   ]);
 
   return {
-    version: 6,
+    version: 7,
     products: products.map((row) => {
       const attributes = {};
       opt(attributes, "fabric", row.fabric);
@@ -235,6 +239,8 @@ export async function reconstructStore(prisma) {
       const request = { id: row.id, userId: row.userId };
       opt(request, "productId", row.productId);
       opt(request, "measurementProfileId", row.measurementProfileId);
+      opt(request, "orderId", row.orderId);
+      opt(request, "orderItemId", row.orderItemId);
       request.details = row.details;
       request.status = row.status;
       request.createdAt = iso(row.createdAt);
@@ -259,6 +265,25 @@ export async function reconstructStore(prisma) {
     orderNotes: orderNotes.map((row) => ({
       id: row.id,
       orderId: row.orderId,
+      ...(row.authorUserId ? { authorUserId: row.authorUserId } : {}),
+      authorName: row.authorName,
+      body: row.body,
+      createdAt: iso(row.createdAt),
+    })),
+
+    customizationActivities: customizationActivities.map((row) => ({
+      id: row.id,
+      customizationRequestId: row.customizationRequestId,
+      type: row.type,
+      ...(row.actorUserId ? { actorUserId: row.actorUserId } : {}),
+      ...(row.fromStatus ? { fromStatus: row.fromStatus } : {}),
+      ...(row.toStatus ? { toStatus: row.toStatus } : {}),
+      createdAt: iso(row.createdAt),
+    })),
+
+    customizationNotes: customizationNotes.map((row) => ({
+      id: row.id,
+      customizationRequestId: row.customizationRequestId,
       ...(row.authorUserId ? { authorUserId: row.authorUserId } : {}),
       authorName: row.authorName,
       body: row.body,
@@ -400,6 +425,8 @@ export async function countAll(prisma) {
     customizationRequests,
     orderActivities,
     orderNotes,
+    customizationActivities,
+    customizationNotes,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.authCredential.count(),
@@ -424,6 +451,8 @@ export async function countAll(prisma) {
     prisma.customizationRequest.count(),
     prisma.orderActivity.count(),
     prisma.orderNote.count(),
+    prisma.customizationActivity.count(),
+    prisma.customizationNote.count(),
   ]);
   return {
     users,
@@ -449,5 +478,7 @@ export async function countAll(prisma) {
     customizationRequests,
     orderActivities,
     orderNotes,
+    customizationActivities,
+    customizationNotes,
   };
 }

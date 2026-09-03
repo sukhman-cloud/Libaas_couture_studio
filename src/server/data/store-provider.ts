@@ -8,6 +8,8 @@ import type {
   Collection,
   CustomerProfile,
   CustomizationRequest,
+  CustomizationActivity,
+  CustomizationNote,
   ID,
   MeasurementProfile,
   MediaAsset,
@@ -45,7 +47,7 @@ import { withLock } from "@/server/lock";
  */
 
 /** Bump when the persisted shape changes; add a step to `migrateStore`. */
-export const STORE_VERSION = 6;
+export const STORE_VERSION = 7;
 
 export interface DataStore {
   version: number;
@@ -65,6 +67,8 @@ export interface DataStore {
   customizationRequests: CustomizationRequest[];
   orderActivities: OrderActivity[];
   orderNotes: OrderNote[];
+  customizationActivities: CustomizationActivity[];
+  customizationNotes: CustomizationNote[];
 }
 
 export function emptyStore(): DataStore {
@@ -86,6 +90,8 @@ export function emptyStore(): DataStore {
     customizationRequests: [],
     orderActivities: [],
     orderNotes: [],
+    customizationActivities: [],
+    customizationNotes: [],
   };
 }
 
@@ -115,6 +121,8 @@ const STORE_COLLECTION_KEYS = [
   "customizationRequests",
   "orderActivities",
   "orderNotes",
+  "customizationActivities",
+  "customizationNotes",
 ] as const;
 
 export function migrateStore(raw: unknown): DataStore | null {
@@ -219,6 +227,7 @@ export function migrateStore(raw: unknown): DataStore | null {
   // every existing record carries over untouched.
 
   // v5 → v6: append-only order activity and private note collections.
+  // v6 → v7: customization workflow activity and private notes.
   // Nothing to convert — emptyStore() supplies both collections and all
   // existing orders remain valid historical records.
 
@@ -655,6 +664,9 @@ function buildStoreRepositories(
       async getById(id) {
         return store.customizationRequests.find((r) => r.id === id) ?? null;
       },
+      async list() {
+        return [...store.customizationRequests];
+      },
       async listByUserId(userId) {
         return store.customizationRequests
           .filter((r) => r.userId === userId)
@@ -669,6 +681,37 @@ function buildStoreRepositories(
           request,
           "Customization request",
         );
+      },
+      async transitionStatus(id, expected, next, updatedAt) {
+        return guard(async () => {
+          const request = store.customizationRequests.find((row) => row.id === id);
+          if (!request || request.status !== expected) return null;
+          request.status = next;
+          request.updatedAt = updatedAt;
+          return request;
+        });
+      },
+    },
+
+    customizationActivities: {
+      async listByRequestId(requestId) {
+        return store.customizationActivities
+          .filter((row) => row.customizationRequestId === requestId)
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+      },
+      async create(activity) {
+        return insert(store.customizationActivities, activity);
+      },
+    },
+
+    customizationNotes: {
+      async listByRequestId(requestId) {
+        return store.customizationNotes
+          .filter((row) => row.customizationRequestId === requestId)
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+      },
+      async create(note) {
+        return insert(store.customizationNotes, note);
       },
     },
 

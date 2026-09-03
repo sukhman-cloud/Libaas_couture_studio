@@ -124,6 +124,8 @@ model User {
   customizationRequests CustomizationRequest[]
   orderActivities       OrderActivity[]        @relation("OrderActivityActor")
   orderNotes            OrderNote[]            @relation("OrderNoteAuthor")
+  customizationActivities CustomizationActivity[] @relation("CustomizationActivityActor")
+  customizationNotes      CustomizationNote[]      @relation("CustomizationNoteAuthor")
 
   @@map("users")
 }
@@ -253,10 +255,15 @@ model MeasurementValue {
 /// Phase 7B: only `draft` is produced today; the remaining states are the
 /// documented roadmap for the future quoting workflow.
 enum CustomizationStatus {
+  pending
+  reviewing
   draft
   quoted
   approved
+  in_progress
+  completed
   rejected
+  cancelled
 
   @@map("customization_status")
 }
@@ -273,6 +280,8 @@ model CustomizationRequest {
   /// Absent for fully custom designs.
   productId            String? @map("product_id")
   measurementProfileId String? @map("measurement_profile_id")
+  orderId              String? @map("order_id")
+  orderItemId          String? @map("order_item_id")
 
   /// Customer free text — untrusted, app-capped, always rendered escaped.
   details String
@@ -284,8 +293,14 @@ model CustomizationRequest {
   user               User                @relation(fields: [userId], references: [id], onDelete: Restrict)
   product            Product?            @relation(fields: [productId], references: [id], onDelete: Restrict)
   measurementProfile MeasurementProfile? @relation(fields: [measurementProfileId], references: [id], onDelete: Restrict)
+  order             Order?             @relation("CustomizationOrder", fields: [orderId], references: [id], onDelete: Restrict)
+  orderItem         OrderItem?         @relation("CustomizationOrderItem", fields: [orderItemId], references: [id], onDelete: Restrict)
+  activities        CustomizationActivity[]
+  notes             CustomizationNote[]
 
   @@index([userId])
+  @@index([orderId])
+  @@index([orderItemId])
   @@map("customization_requests")
 }
 
@@ -604,6 +619,7 @@ model Order {
   items      OrderItem[]
   activities OrderActivity[]
   notes      OrderNote[]
+  customizationRequests CustomizationRequest[] @relation("CustomizationOrder")
 
   @@unique([userId, idempotencyKey])
   @@index([userId])
@@ -639,6 +655,7 @@ model OrderItem {
 
   order   Order   @relation(fields: [orderId], references: [id], onDelete: Restrict)
   product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  customizationRequests CustomizationRequest[] @relation("CustomizationOrderItem")
 
   @@index([orderId])
   @@index([productId])
@@ -678,4 +695,35 @@ model OrderNote {
 
   @@index([orderId, createdAt])
   @@map("order_notes")
+}
+
+model CustomizationActivity {
+  id                     String             @id
+  customizationRequestId String             @map("customization_request_id")
+  type                   String
+  actorUserId            String?            @map("actor_user_id")
+  fromStatus             CustomizationStatus? @map("from_status")
+  toStatus               CustomizationStatus? @map("to_status")
+  createdAt              DateTime           @map("created_at")
+
+  request CustomizationRequest @relation(fields: [customizationRequestId], references: [id], onDelete: Restrict)
+  actor   User? @relation("CustomizationActivityActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([customizationRequestId, createdAt])
+  @@map("customization_activities")
+}
+
+model CustomizationNote {
+  id                     String   @id
+  customizationRequestId String   @map("customization_request_id")
+  authorUserId            String?  @map("author_user_id")
+  authorName              String   @map("author_name")
+  body                    String
+  createdAt               DateTime @map("created_at")
+
+  request CustomizationRequest @relation(fields: [customizationRequestId], references: [id], onDelete: Restrict)
+  author  User? @relation("CustomizationNoteAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  @@index([customizationRequestId, createdAt])
+  @@map("customization_notes")
 }

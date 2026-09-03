@@ -2,6 +2,7 @@ import "server-only";
 import { randomUUID } from "crypto";
 import { getRepositories } from "@/server/data";
 import type { CustomizationRequest, User } from "@/types/domain";
+import { isOrderNumber } from "@/server/orders/service";
 
 /**
  * Customization-request foundation (Phase 7B).
@@ -44,6 +45,8 @@ export async function createCustomizationRequest(input: {
   /** Public product slug; omit for a fully custom design. */
   productSlug?: string;
   measurementProfileId?: string;
+  orderNumber?: string;
+  orderItemId?: string;
 }): Promise<CreateCustomizationResult> {
   const { user } = input;
   const repos = getRepositories();
@@ -99,17 +102,46 @@ export async function createCustomizationRequest(input: {
     measurementProfileId = profile.id;
   }
 
+  let orderId: string | undefined;
+  let orderItemId: string | undefined;
+  if (input.orderNumber !== undefined || input.orderItemId !== undefined) {
+    if (
+      !isOrderNumber(input.orderNumber) ||
+      typeof input.orderItemId !== "string" ||
+      !input.orderItemId
+    ) {
+      return { ok: false, message: "That order item is not available." };
+    }
+    const order = await repos.orders.getByOrderNumber(input.orderNumber);
+    const item = order?.items.find((candidate) => candidate.id === input.orderItemId);
+    if (!order || order.userId !== user.id || !item) {
+      return { ok: false, message: "That order item is not available." };
+    }
+    orderId = order.id;
+    orderItemId = item.id;
+  }
+
   const now = new Date().toISOString();
-  const request = await repos.customizationRequests.create({
-    id: randomUUID(),
-    userId: user.id,
-    ...(productId === undefined ? {} : { productId }),
-    ...(measurementProfileId === undefined ? {} : { measurementProfileId }),
-    details,
-    // Always draft — a status can never arrive from outside.
-    status: "draft",
-    createdAt: now,
-    updatedAt: now,
+  const request = await repos.transaction(async (tx) => {
+    const created = await tx.customizationRequests.create({
+      id: randomUUID(),
+      userId: user.id,
+      ...(productId === undefined ? {} : { productId }),
+      ...(measurementProfileId === undefined ? {} : { measurementProfileId }),
+      ...(orderId === undefined ? {} : { orderId }),
+      ...(orderItemId === undefined ? {} : { orderItemId }),
+      details,
+      status: "pending",
+      createdAt: now,
+      updatedAt: now,
+    });
+    await tx.customizationActivities.create({
+      id: randomUUID(),
+      customizationRequestId: created.id,
+      type: "request_created",
+      createdAt: now,
+    });
+    return created;
   });
   return { ok: true, request };
 }

@@ -10,6 +10,7 @@ import {
   Settings,
   ShoppingBag,
   UserRound,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,7 @@ const items = [
   { title: "Profile", href: "/account/profile", icon: UserRound },
   { title: "Addresses", href: "/account/addresses", icon: MapPin },
   { title: "Measurements", href: "/account/measurements", icon: Ruler },
+  { title: "Customizations", href: "/account/customizations", icon: Sparkles },
   { title: "Settings", href: "/account/settings", icon: Settings },
 ];
 

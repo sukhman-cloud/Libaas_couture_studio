@@ -82,13 +82,7 @@ export interface AdminOrderList {
   totalOrders: number;
 }
 
-export interface AdminOrderItemView extends CustomerOrderItemView {
-  customization?: {
-    status: string;
-    details: string;
-    createdAt: string;
-  };
-}
+export type AdminOrderItemView = CustomerOrderItemView;
 
 export interface AdminOrderActivityView {
   type: OrderActivity["type"];
@@ -121,31 +115,17 @@ export interface AdminOrderDetail {
   totalQuantity: number;
   activities: AdminOrderActivityView[];
   notes: AdminOrderNoteView[];
+  customizationRequests: Array<{
+    id: string;
+    status: string;
+    details: string;
+    orderItemId?: string;
+    createdAt: string;
+  }>;
 }
 
 async function buildAdminItemViews(order: Order): Promise<AdminOrderItemView[]> {
-  const baseItems = await buildOrderItemViews(order);
-  return Promise.all(
-    order.items.map(async (item, index) => {
-      const request = item.customizationRequestId
-        ? await getRepositories().customizationRequests.getById(
-            item.customizationRequestId,
-          )
-        : null;
-      return {
-        ...baseItems[index],
-        ...(request
-          ? {
-              customization: {
-                status: request.status,
-                details: request.details,
-                createdAt: request.createdAt,
-              },
-            }
-          : {}),
-      };
-    }),
-  );
+  return buildOrderItemViews(order);
 }
 
 function activityView(activity: OrderActivity): AdminOrderActivityView {
@@ -248,6 +228,9 @@ export async function getAdminOrderByNumber(
     getRepositories().orderActivities.listByOrderId(order.id),
     getRepositories().orderNotes.listByOrderId(order.id),
   ]);
+  const customizationRequests = (await getRepositories().customizationRequests.list()).filter(
+    (request) => request.orderId === order.id,
+  );
 
   return {
     orderNumber: order.orderNumber,
@@ -269,6 +252,13 @@ export async function getAdminOrderByNumber(
       authorName: note.authorName,
       body: note.body,
       createdAt: note.createdAt,
+    })),
+    customizationRequests: customizationRequests.map((request) => ({
+      id: request.id,
+      status: request.status,
+      details: request.details,
+      ...(request.orderItemId ? { orderItemId: request.orderItemId } : {}),
+      createdAt: request.createdAt,
     })),
   };
 }

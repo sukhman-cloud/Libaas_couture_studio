@@ -13,6 +13,7 @@ import { Caption, Heading, Text } from "@/components/ui/typography";
 import { formatPrice } from "@/lib/utils";
 import { getAdminOrderByNumber } from "@/server/orders/admin";
 import { allowedNextStatuses, ORDER_STATUS_LABELS } from "@/server/orders/workflow";
+import { CUSTOMIZATION_STATUS_LABELS } from "@/server/customization/workflow";
 
 export const metadata: Metadata = { title: "Admin · Order" };
 
@@ -60,6 +61,28 @@ export default async function AdminOrderDetailPage({
       <div className="space-y-5">
         <div className="grid gap-5 lg:grid-cols-2">
           <Card>
+
+          {order.customizationRequests.length > 0 && (
+            <Card>
+              <CardContent className="space-y-3 p-4 sm:p-5">
+                <Heading level={2} className="text-lg">
+                  Customization requests
+                </Heading>
+                {order.customizationRequests.map((request) => (
+                  <Link
+                    key={request.id}
+                    href={`/admin/customizations/${request.id}`}
+                    className="block rounded-xl bg-cream-50 p-3 text-sm text-navy-800 underline-offset-4 hover:underline"
+                  >
+                    <span className="font-medium">{CUSTOMIZATION_STATUS_LABELS[request.status as keyof typeof CUSTOMIZATION_STATUS_LABELS] ?? request.status}</span>
+                    <span className="mt-1 block whitespace-pre-wrap wrap-break-word text-muted">
+                      {request.details}
+                    </span>
+                  </Link>
+                ))}
+              </CardContent>
+            </Card>
+          )}
             <CardContent className="p-4 sm:p-5">
               <Heading level={2} className="mb-2 text-lg">
                 Customer

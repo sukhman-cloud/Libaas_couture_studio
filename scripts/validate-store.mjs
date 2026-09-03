@@ -64,6 +64,8 @@ const COLLECTIONS = [
   "customizationRequests",
   "orderActivities",
   "orderNotes",
+  "customizationActivities",
+  "customizationNotes",
 ];
 
 for (const key of COLLECTIONS) {
@@ -325,6 +327,10 @@ const ORDER_STATUSES = new Set([
   "ready",
   "completed",
   "cancelled",
+]);
+const CUSTOMIZATION_STATUSES = new Set([
+  "pending", "reviewing", "draft", "quoted", "approved", "in_progress",
+  "completed", "rejected", "cancelled",
 ]);
 const AVAILABILITIES = new Set(["available", "made_to_order", "out_of_stock", "discontinued"]);
 
@@ -635,7 +641,7 @@ checkTimestamps(customizationRequests, "customizationRequest");
 const measurementIds = new Set(measurements.map((m) => m.id));
 for (const request of customizationRequests) {
   checkOwner(request, "CustomizationRequest");
-  if (!["draft", "quoted", "approved", "rejected"].includes(request.status)) {
+  if (!CUSTOMIZATION_STATUSES.has(request.status)) {
     problem("shape", `CustomizationRequest ${request.id}: unknown status "${request.status}".`);
   }
   if (typeof request.details !== "string" || !request.details || request.details.length > 1000) {
@@ -651,6 +657,18 @@ for (const request of customizationRequests) {
   ) {
     problem("orphan", `CustomizationRequest ${request.id} references missing measurement profile ${request.measurementProfileId}.`);
   }
+  if (request.orderId && !orderIds.has(request.orderId)) problem("orphan", `CustomizationRequest ${request.id} references missing order ${request.orderId}.`);
+}
+
+const customizationIds = new Set(customizationRequests.map((request) => request.id));
+for (const activity of rows("customizationActivities")) {
+  if (!customizationIds.has(activity.customizationRequestId)) problem("orphan", `CustomizationActivity ${activity.id} references missing request.`);
+  if (!CUSTOMIZATION_STATUSES.has(activity.fromStatus) && activity.fromStatus) problem("shape", `CustomizationActivity ${activity.id}: invalid fromStatus.`);
+  if (!CUSTOMIZATION_STATUSES.has(activity.toStatus) && activity.toStatus) problem("shape", `CustomizationActivity ${activity.id}: invalid toStatus.`);
+}
+for (const note of rows("customizationNotes")) {
+  if (!customizationIds.has(note.customizationRequestId)) problem("orphan", `CustomizationNote ${note.id} references missing request.`);
+  if (typeof note.body !== "string" || !note.body.trim() || note.body.length > 2000) problem("shape", `CustomizationNote ${note.id}: body is empty or over 2000 chars.`);
 }
 
 /* ── report ─────────────────────────────────────────────────────── */

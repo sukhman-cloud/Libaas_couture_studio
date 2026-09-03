@@ -4,6 +4,7 @@ import {
   Boxes,
   CalendarDays,
   ClipboardList,
+  Sparkles,
   CreditCard,
   FolderTree,
   Heart,
@@ -74,6 +75,7 @@ export const adminNavGroups: NavGroup[] = [
     items: [
       { title: "Dashboard", href: "/admin", icon: LayoutDashboard, exact: true },
       { title: "Orders", href: "/admin/orders", icon: ShoppingBag },
+      { title: "Customizations", href: "/admin/customizations", icon: Sparkles },
       { title: "Products", href: "/admin/products", icon: Package },
       { title: "Categories", href: "/admin/categories", icon: FolderTree },
       { title: "Collections", href: "/admin/collections", icon: LayoutGrid },

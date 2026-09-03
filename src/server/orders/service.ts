@@ -534,6 +534,7 @@ export async function getOwnOrderByNumber(
  * the honest placeholder rather than silently changing with catalog edits.
  */
 export interface CustomerOrderItemView {
+  id: string;
   name: string;
   slug: string;
   quantity: number;
@@ -549,6 +550,7 @@ export interface CustomerOrderItemView {
   notes?: string;
   /** A customization request reference rides on the item (future flows). */
   hasCustomizationRequest: boolean;
+  customization?: { status: string; details: string };
 }
 
 export interface CustomerOrderDetail {
@@ -566,6 +568,12 @@ export interface CustomerOrderDetail {
   total: Money;
   itemCount: number;
   totalQuantity: number;
+  customizationRequests: Array<{
+    id: string;
+    status: string;
+    details: string;
+    orderItemId?: string;
+  }>;
 }
 
 export interface CustomerOrderListItem {
@@ -593,15 +601,31 @@ export const ORDERS_PER_PAGE = 10;
 /** Item views for one order, shared with the admin service. */
 export async function buildOrderItemViews(
   order: Order,
+  userId?: string,
 ): Promise<CustomerOrderItemView[]> {
-  return order.items.map((item) => toCustomerItemView(item));
+  return Promise.all(
+    order.items.map(async (item) => {
+      const request = userId && item.customizationRequestId
+        ? await getRepositories().customizationRequests.getById(item.customizationRequestId)
+        : null;
+      return toCustomerItemView(
+        item,
+        undefined,
+        request?.userId === userId && request
+          ? { status: request.status, details: request.details }
+          : undefined,
+      );
+    }),
+  );
 }
 
 function toCustomerItemView(
   item: OrderItem,
   image?: { mediaId: string; alt: string },
+  customization?: { status: string; details: string },
 ): CustomerOrderItemView {
   return {
+    id: item.id,
     name: item.nameSnapshot,
     slug: item.slugSnapshot,
     quantity: item.quantity,
@@ -618,6 +642,7 @@ function toCustomerItemView(
     hasMeasurementSnapshot: item.stitching?.measurements !== undefined,
     ...(item.notes ? { notes: item.notes } : {}),
     hasCustomizationRequest: item.customizationRequestId !== undefined,
+    ...(customization ? { customization } : {}),
   };
 }
 
@@ -678,6 +703,9 @@ export async function getOwnOrderDetail(
   if (!isOrderNumber(orderNumber)) return null;
   const order = await getRepositories().orders.getByOrderNumber(orderNumber);
   if (!order || order.userId !== userId) return null;
+  const requests = (await getRepositories().customizationRequests.list()).filter(
+    (request) => request.userId === userId && request.orderId === order.id,
+  );
 
   return {
     orderNumber: order.orderNumber,
@@ -685,7 +713,7 @@ export async function getOwnOrderDetail(
     status: order.status,
     customer: order.customer,
     shippingAddress: order.shippingAddress,
-    items: await buildOrderItemViews(order),
+    items: await buildOrderItemViews(order, userId),
     currency: order.currency,
     subtotal: order.subtotal,
     shippingAmount: order.shippingAmount,
@@ -694,5 +722,11 @@ export async function getOwnOrderDetail(
     total: order.total,
     itemCount: order.items.length,
     totalQuantity: order.items.reduce((sum, i) => sum + i.quantity, 0),
+    customizationRequests: requests.map((request) => ({
+      id: request.id,
+      status: request.status,
+      details: request.details,
+      ...(request.orderItemId ? { orderItemId: request.orderItemId } : {}),
+    })),
   };
 }

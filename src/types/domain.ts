@@ -310,10 +310,43 @@ export interface MeasurementProfile extends Timestamps {
  * NOT produced by any current flow.
  */
 export type CustomizationStatus =
+  | "pending"
+  | "reviewing"
   | "draft"
   | "quoted"
   | "approved"
-  | "rejected";
+  | "in_progress"
+  | "completed"
+  | "rejected"
+  | "cancelled";
+
+export type CustomizationActivityType =
+  | "request_created"
+  | "status_changed"
+  | "request_approved"
+  | "request_rejected"
+  | "request_completed"
+  | "customer_cancelled"
+  | "internal_note_added";
+
+export interface CustomizationActivity {
+  id: ID;
+  customizationRequestId: ID;
+  type: CustomizationActivityType;
+  actorUserId?: ID;
+  fromStatus?: CustomizationStatus;
+  toStatus?: CustomizationStatus;
+  createdAt: ISODateTime;
+}
+
+export interface CustomizationNote {
+  id: ID;
+  customizationRequestId: ID;
+  authorUserId?: ID;
+  authorName: string;
+  body: string;
+  createdAt: ISODateTime;
+}
 
 /**
  * A customer's request for a customised piece (Phase 7B foundation).
@@ -333,6 +366,8 @@ export interface CustomizationRequest extends Timestamps {
   userId: ID;
   productId?: ID; // absent for fully custom designs
   measurementProfileId?: ID;
+  orderId?: ID;
+  orderItemId?: ID;
   details: string;
   status: CustomizationStatus;
 }

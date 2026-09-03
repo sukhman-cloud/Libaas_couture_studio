@@ -12,6 +12,7 @@ import { Caption, Heading, Text } from "@/components/ui/typography";
 import { getCustomerUser } from "@/lib/auth/customer-session";
 import { formatPrice } from "@/lib/utils";
 import { getOwnOrderDetail } from "@/server/orders/service";
+import { ORDER_STATUS_LABELS } from "@/server/orders/workflow";
 
 export const metadata: Metadata = {
   title: "Order details",
@@ -121,6 +122,24 @@ export default async function OrderDetailPage({
                       notes={item.notes}
                       hasCustomizationRequest={item.hasCustomizationRequest}
                     />
+                    {item.customization && (
+                      <div className="rounded-xl bg-cream-50 p-3 text-sm">
+                        <p className="font-medium text-navy-800">
+                          Customization request: {item.customization.status}
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap wrap-break-word text-muted">
+                          {item.customization.details}
+                        </p>
+                      </div>
+                    )}
+                    {!item.hasCustomizationRequest && (
+                      <Link
+                        href={`/account/customizations/new?order=${encodeURIComponent(order.orderNumber)}&item=${encodeURIComponent(item.id)}`}
+                        className="inline-flex min-h-11 items-center text-sm text-navy-700 underline-offset-4 hover:underline"
+                      >
+                        Request customization for this item
+                      </Link>
+                    )}
                   </div>
                 </li>
               ))}
@@ -166,6 +185,28 @@ export default async function OrderDetailPage({
             </div>
           </CardContent>
         </Card>
+
+        {order.customizationRequests.length > 0 && (
+          <Card>
+            <CardContent className="space-y-3 p-4 sm:p-5">
+              <Heading level={2} className="text-lg">
+                Customization requests
+              </Heading>
+              {order.customizationRequests.map((request) => (
+                <Link
+                  key={request.id}
+                  href={`/account/customizations/${request.id}`}
+                  className="block rounded-xl bg-cream-50 p-3 text-sm text-navy-800 underline-offset-4 hover:underline"
+                >
+                  <span className="font-medium">{ORDER_STATUS_LABELS[request.status as keyof typeof ORDER_STATUS_LABELS] ?? request.status}</span>
+                  <span className="mt-1 block whitespace-pre-wrap wrap-break-word text-muted">
+                    {request.details}
+                  </span>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid gap-5 sm:grid-cols-2">
           <Card>
