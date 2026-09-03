@@ -12,6 +12,7 @@ import {
   publishedInOrder,
   queryCategories,
   queryCollections,
+  queryOrders,
   sortProducts,
 } from "@/server/data/catalog-logic";
 import { getPrismaClient } from "@/server/data/postgres/client";
@@ -441,6 +442,19 @@ function buildPostgresRepositories(db: Db): StoreRepositories {
           orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         });
         return paginate(rows.map(toOrder), params);
+      },
+      async query(params) {
+        // Same deliberate trade-off as the catalog: load rows and run the
+        // SHARED predicates (catalog-logic.queryOrders), so search/sort
+        // semantics are byte-identical across providers and Prisma's
+        // insensitive-ILIKE pitfalls never enter the picture. Status is
+        // pushed down as a cheap SQL pre-filter; revisit with real volume.
+        const rows = await db.order.findMany({
+          ...ATOMIC_READ,
+          ...(params.status ? { where: { status: params.status } } : {}),
+          include: ORDER_INCLUDE,
+        });
+        return queryOrders(rows.map(toOrder), params);
       },
       async create(order) {
         // orderNumber and (userId, idempotencyKey) uniqueness are enforced

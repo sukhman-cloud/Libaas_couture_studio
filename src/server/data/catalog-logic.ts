@@ -2,6 +2,7 @@ import "server-only";
 import type {
   Category,
   Collection,
+  Order,
   Product,
 } from "@/types/domain";
 import {
@@ -10,6 +11,8 @@ import {
   type CategoryQuery,
   type CollectionQuery,
   type ListParams,
+  type OrderQuery,
+  type OrderSort,
   type Paged,
   type ProductQuery,
   type ProductSort,
@@ -210,4 +213,64 @@ export function queryCollections(
     matched = matched.filter((c) => matchesText([c.name, c.slug], term));
   }
   return page([...matched].sort(byOrderThenName), query);
+}
+
+/* ── orders (Phase 7C — the SHARED admin query rules) ──────────────── */
+
+/**
+ * One predicate for the admin order search: order number, customer name
+ * and customer email only — never credentials, never internal ids. The
+ * text matcher is the same case-insensitive substring rule the catalog
+ * uses.
+ */
+export function orderMatches(order: Order, query: OrderQuery): boolean {
+  if (query.status && order.status !== query.status) return false;
+  if (query.search) {
+    return matchesText(
+      [order.orderNumber, order.customer.name, order.customer.email],
+      query.search,
+    );
+  }
+  return true;
+}
+
+/** Stable order sorting — every sort ends in an id tiebreak so paging
+ *  never shuffles rows between requests. */
+export function sortOrders(rows: Order[], sort: OrderSort = "newest"): Order[] {
+  const byId = (a: Order, b: Order) => a.id.localeCompare(b.id);
+  const sorted = [...rows];
+  switch (sort) {
+    case "oldest":
+      sorted.sort(
+        (a, b) => a.createdAt.localeCompare(b.createdAt) || byId(a, b),
+      );
+      break;
+    case "total_desc":
+      sorted.sort(
+        (a, b) =>
+          b.total.amount - a.total.amount ||
+          b.createdAt.localeCompare(a.createdAt) ||
+          byId(a, b),
+      );
+      break;
+    case "total_asc":
+      sorted.sort(
+        (a, b) =>
+          a.total.amount - b.total.amount ||
+          b.createdAt.localeCompare(a.createdAt) ||
+          byId(a, b),
+      );
+      break;
+    default: // newest
+      sorted.sort(
+        (a, b) => b.createdAt.localeCompare(a.createdAt) || byId(a, b),
+      );
+  }
+  return sorted;
+}
+
+/** Filter → sort → page, the one implementation both providers run. */
+export function queryOrders(rows: Order[], query: OrderQuery): Paged<Order> {
+  const matched = rows.filter((order) => orderMatches(order, query));
+  return page(sortOrders(matched, query.sort), query);
 }

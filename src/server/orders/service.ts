@@ -18,6 +18,7 @@ import type {
   Order,
   OrderAddressSnapshot,
   OrderItem,
+  OrderItemMeasurementSnapshot,
   User,
 } from "@/types/domain";
 
@@ -491,6 +492,15 @@ export async function createOrderFromCheckout(input: {
   }
 }
 
+/** Customer-facing order-number format — validated BEFORE any lookup, so
+ *  malformed input never reaches storage and never becomes an oracle. */
+export function isOrderNumber(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^LCS-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$/.test(value)
+  );
+}
+
 /**
  * Ownership-aware lookup for the success page: the order is returned only
  * to the user it belongs to. Missing and foreign orders are
@@ -500,13 +510,183 @@ export async function getOwnOrderByNumber(
   userId: string,
   orderNumber: string,
 ): Promise<PlacedOrderView | null> {
-  if (
-    typeof orderNumber !== "string" ||
-    !/^LCS-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$/.test(orderNumber)
-  ) {
-    return null;
-  }
+  if (!isOrderNumber(orderNumber)) return null;
   const order = await getRepositories().orders.getByOrderNumber(orderNumber);
   if (!order || order.userId !== userId) return null;
   return toPlacedView(order);
+}
+
+/* ── customer order history (Phase 7C — read + display only) ────── */
+
+/**
+ * View models for the customer's own order pages. Internal ids,
+ * idempotency keys and fingerprints never leave the server; items are
+ * rendered from the ORDER'S OWN snapshots (name, price, address,
+ * measurements) — never re-resolved against current catalog or profile
+ * data. Product media is deliberately not resolved from the current
+ * catalog: OrderItem has no historical image reference, so old orders use
+ * the honest placeholder rather than silently changing with catalog edits.
+ */
+export interface CustomerOrderItemView {
+  name: string;
+  slug: string;
+  quantity: number;
+  unitPrice: Money;
+  lineSubtotal: Money;
+  image?: { mediaId: string; alt: string };
+  stitched: boolean;
+  measurementProfileLabel?: string;
+  /** The immutable Phase 7B snapshot, verbatim. Absent on pre-7B orders. */
+  measurements?: OrderItemMeasurementSnapshot;
+  hasMeasurementSnapshot: boolean;
+  /** Cart-line notes, when the customer left any. */
+  notes?: string;
+  /** A customization request reference rides on the item (future flows). */
+  hasCustomizationRequest: boolean;
+}
+
+export interface CustomerOrderDetail {
+  orderNumber: string;
+  placedAt: string;
+  status: Order["status"];
+  customer: Order["customer"];
+  shippingAddress: OrderAddressSnapshot;
+  items: CustomerOrderItemView[];
+  currency: Order["currency"];
+  subtotal: Money;
+  shippingAmount: Money;
+  taxAmount: Money;
+  discountAmount: Money;
+  total: Money;
+  itemCount: number;
+  totalQuantity: number;
+}
+
+export interface CustomerOrderListItem {
+  orderNumber: string;
+  placedAt: string;
+  status: Order["status"];
+  itemCount: number;
+  totalQuantity: number;
+  total: Money;
+  /** First line's snapshot name — "and N more" is the UI's job. */
+  firstItemName: string;
+  hasStitchedItems: boolean;
+  image?: { mediaId: string; alt: string };
+}
+
+export interface CustomerOrderList {
+  items: CustomerOrderListItem[];
+  page: number;
+  totalPages: number;
+  totalOrders: number;
+}
+
+export const ORDERS_PER_PAGE = 10;
+
+/** Item views for one order, shared with the admin service. */
+export async function buildOrderItemViews(
+  order: Order,
+): Promise<CustomerOrderItemView[]> {
+  return order.items.map((item) => toCustomerItemView(item));
+}
+
+function toCustomerItemView(
+  item: OrderItem,
+  image?: { mediaId: string; alt: string },
+): CustomerOrderItemView {
+  return {
+    name: item.nameSnapshot,
+    slug: item.slugSnapshot,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    lineSubtotal: item.lineSubtotal,
+    ...(image ? { image } : {}),
+    stitched: item.stitching?.selected === true,
+    ...(item.stitching?.measurementProfileLabel
+      ? { measurementProfileLabel: item.stitching.measurementProfileLabel }
+      : {}),
+    ...(item.stitching?.measurements
+      ? { measurements: item.stitching.measurements }
+      : {}),
+    hasMeasurementSnapshot: item.stitching?.measurements !== undefined,
+    ...(item.notes ? { notes: item.notes } : {}),
+    hasCustomizationRequest: item.customizationRequestId !== undefined,
+  };
+}
+
+/**
+ * The customer's own orders, newest first, one page at a time. Invalid
+ * page values normalize; an out-of-range page clamps to the last one.
+ * Pagination note (§13): the customer's own orders are read via the
+ * ownership-scoped repository listing and paged here — at boutique scale
+ * a per-customer count stays tiny, and the page contract is already in
+ * place for when it is not.
+ */
+export async function listOwnOrders(
+  userId: string,
+  requestedPage?: unknown,
+): Promise<CustomerOrderList> {
+  const orders = await getRepositories().orders.listByUserId(userId);
+  const totalOrders = orders.length;
+  const totalPages = Math.max(1, Math.ceil(totalOrders / ORDERS_PER_PAGE));
+  const parsed = Number(requestedPage);
+  const page =
+    Number.isInteger(parsed) && parsed >= 1
+      ? Math.min(parsed, totalPages)
+      : 1;
+
+  const slice = orders.slice(
+    (page - 1) * ORDERS_PER_PAGE,
+    page * ORDERS_PER_PAGE,
+  );
+  const items = await Promise.all(
+    slice.map(async (order): Promise<CustomerOrderListItem> => {
+      const first = order.items[0];
+      return {
+        orderNumber: order.orderNumber,
+        placedAt: order.createdAt,
+        status: order.status,
+        itemCount: order.items.length,
+        totalQuantity: order.items.reduce((sum, i) => sum + i.quantity, 0),
+        total: order.total,
+        firstItemName: first?.nameSnapshot ?? "",
+        hasStitchedItems: order.items.some(
+          (i) => i.stitching?.selected === true,
+        ),
+      };
+    }),
+  );
+  return { items, page, totalPages, totalOrders };
+}
+
+/**
+ * Full ownership-scoped order detail — the first real consumer of the
+ * Phase 7B measurement snapshot. Malformed, unknown and foreign order
+ * numbers are indistinguishable (null).
+ */
+export async function getOwnOrderDetail(
+  userId: string,
+  orderNumber: string,
+): Promise<CustomerOrderDetail | null> {
+  if (!isOrderNumber(orderNumber)) return null;
+  const order = await getRepositories().orders.getByOrderNumber(orderNumber);
+  if (!order || order.userId !== userId) return null;
+
+  return {
+    orderNumber: order.orderNumber,
+    placedAt: order.createdAt,
+    status: order.status,
+    customer: order.customer,
+    shippingAddress: order.shippingAddress,
+    items: await buildOrderItemViews(order),
+    currency: order.currency,
+    subtotal: order.subtotal,
+    shippingAmount: order.shippingAmount,
+    taxAmount: order.taxAmount,
+    discountAmount: order.discountAmount,
+    total: order.total,
+    itemCount: order.items.length,
+    totalQuantity: order.items.reduce((sum, i) => sum + i.quantity, 0),
+  };
 }

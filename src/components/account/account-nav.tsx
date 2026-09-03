@@ -8,12 +8,14 @@ import {
   MapPin,
   Ruler,
   Settings,
+  ShoppingBag,
   UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
   { title: "Overview", href: "/account", icon: LayoutDashboard, exact: true },
+  { title: "Orders", href: "/account/orders", icon: ShoppingBag },
   { title: "Wishlist", href: "/account/wishlist", icon: Heart },
   { title: "Profile", href: "/account/profile", icon: UserRound },
   { title: "Addresses", href: "/account/addresses", icon: MapPin },
@@ -29,7 +31,10 @@ export function AccountNav() {
   const pathname = usePathname();
 
   return (
-    <nav aria-label="Account">
+    // min-w-0: as a grid item the nav must be allowed to shrink below its
+    // content width, otherwise the pill row (overflow-x-auto) can never
+    // scroll and the whole page overflows on phones instead.
+    <nav aria-label="Account" className="min-w-0">
       <ul className="flex gap-1.5 overflow-x-auto pb-1 lg:flex-col lg:gap-1 lg:overflow-visible lg:pb-0">
         {items.map((item) => {
           const active = item.exact

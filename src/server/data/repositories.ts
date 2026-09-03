@@ -186,6 +186,20 @@ export interface MediaRepository {
  *     create two orders. Violations throw; callers treat a duplicate-key
  *     failure as "look the existing order up and return it".
  */
+/** Validated admin order query (Phase 7C). The service layer normalizes
+ *  and caps every field BEFORE it reaches a repository. */
+export type OrderSort = "newest" | "oldest" | "total_desc" | "total_asc";
+
+export interface OrderQuery extends ListParams {
+  /** Normalized free text, matched against order number, customer name
+   *  and customer email via the ONE shared predicate (order-matching in
+   *  catalog-logic.ts) — never against credentials. */
+  search?: string;
+  status?: Order["status"];
+  /** Defaults to "newest"; every sort has a stable id tiebreak. */
+  sort?: OrderSort;
+}
+
 export interface OrderRepository {
   list(params?: ListParams): Promise<Order[]>;
   getById(id: ID): Promise<Order | null>;
@@ -195,6 +209,9 @@ export interface OrderRepository {
   getByIdempotencyKey(userId: ID, idempotencyKey: string): Promise<Order | null>;
   /** Ownership-scoped listing, newest first (Phase 6D's order history). */
   listByUserId(userId: ID, params?: ListParams): Promise<Order[]>;
+  /** Admin search/filter/sort/pagination (Phase 7C) — both providers run
+   *  the SHARED predicates so behavior is identical. */
+  query(params: OrderQuery): Promise<Paged<Order>>;
   create(order: Order): Promise<Order>;
   count(): Promise<number>;
   countByStatus(): Promise<Record<string, number>>;

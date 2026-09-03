@@ -154,6 +154,12 @@ export default async function OrderPlacedPage({
             <Link href="/shop" className={buttonStyles()}>
               Continue shopping
             </Link>
+            <Link
+              href={`/account/orders/${order.orderNumber}`}
+              className={buttonStyles({ variant: "outline" })}
+            >
+              View order
+            </Link>
             <Link href="/account" className={buttonStyles({ variant: "outline" })}>
               Your account
             </Link>

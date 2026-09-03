@@ -31,6 +31,7 @@ import {
   publishedInOrder,
   queryCategories,
   queryCollections,
+  queryOrders,
   sortProducts,
 } from "@/server/data/catalog-logic";
 import { withLock } from "@/server/lock";
@@ -439,6 +440,9 @@ function buildStoreRepositories(
           .filter((o) => o.userId === userId)
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
         return paginate(mine, params);
+      },
+      async query(params) {
+        return queryOrders(store.orders, params);
       },
       async create(order) {
         // Uniqueness enforced INSIDE the guarded section, so the check and

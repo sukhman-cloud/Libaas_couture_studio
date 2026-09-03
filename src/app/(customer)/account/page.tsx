@@ -9,11 +9,10 @@ import {
   ShoppingBag,
   UserRound,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { buttonStyles } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
-import { Caption, Heading, Text } from "@/components/ui/typography";
+import { Heading, Text } from "@/components/ui/typography";
 import { logoutCustomer } from "@/lib/auth/customer-actions";
 import { getCustomerUser } from "@/lib/auth/customer-session";
 import { getRepositories } from "@/server/data";
@@ -25,9 +24,10 @@ export default async function AccountPage() {
   if (!user) redirect("/login?from=/account");
 
   const repos = getRepositories();
-  const [profile, measurements] = await Promise.all([
+  const [profile, measurements, orders] = await Promise.all([
     repos.customers.getByUserId(user.id),
     repos.measurementProfiles.listByUserId(user.id),
+    repos.orders.listByUserId(user.id),
   ]);
   const addresses = profile?.addresses ?? [];
   const defaultAddress = addresses.find(
@@ -35,6 +35,15 @@ export default async function AccountPage() {
   );
 
   const tiles = [
+    {
+      icon: ShoppingBag,
+      title: "Orders",
+      href: "/account/orders",
+      summary: orders.length
+        ? `${orders.length} order${orders.length > 1 ? "s" : ""} placed`
+        : "No orders yet",
+      cta: orders.length ? "View orders" : "Browse the shop",
+    },
     {
       icon: UserRound,
       title: "Profile",
@@ -113,26 +122,6 @@ export default async function AccountPage() {
         ))}
       </div>
 
-      {/* Future module — honest placeholder, no fake data */}
-      <Card className="mt-4 opacity-70">
-        <CardContent className="flex items-center gap-3">
-          <span className="inline-flex size-10 items-center justify-center rounded-full bg-cream-100 text-muted">
-            <ShoppingBag className="size-5" aria-hidden />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <Heading level={3} className="text-lg">
-                Orders
-              </Heading>
-              <Badge tone="neutral">Coming soon</Badge>
-            </div>
-            <Caption>
-              Your orders and their stitching progress will appear here in a
-              later phase.
-            </Caption>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
