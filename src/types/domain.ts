@@ -457,7 +457,14 @@ export type OrderActivityType =
   | "order_created"
   | "status_changed"
   | "order_cancelled"
-  | "internal_note_added";
+  | "internal_note_added"
+  | "payment_created"
+  | "payment_attempt_started"
+  | "payment_succeeded"
+  | "payment_failed"
+  | "payment_cancelled"
+  | "payment_refunded"
+  | "payment_webhook_processed";
 
 export interface OrderActivity {
   id: ID;
@@ -596,17 +603,85 @@ export interface Order extends Timestamps {
   requestFingerprint: string;
 }
 
-export type PaymentStatus = "pending" | "authorized" | "captured" | "failed" | "refunded";
-export type PaymentMethod = "cod" | "upi" | "card" | "netbanking" | "in_store";
+export type PaymentStatus =
+  | "unpaid"
+  | "pending"
+  | "authorized"
+  | "paid"
+  | "failed"
+  | "cancelled"
+  | "refunded";
+
+export type PaymentProvider = "manual" | "cash_on_delivery" | "online_gateway";
+export type PaymentMethod = PaymentProvider;
+
+export type PaymentAttemptStatus =
+  | "pending"
+  | "authorized"
+  | "paid"
+  | "failed"
+  | "cancelled";
+
+export type PaymentActivityType =
+  | "payment_created"
+  | "payment_attempt_started"
+  | "payment_succeeded"
+  | "payment_failed"
+  | "payment_cancelled"
+  | "payment_refunded"
+  | "webhook_processed";
 
 export interface Payment extends Timestamps {
   id: ID;
   orderId: ID;
+  provider: PaymentProvider;
+  providerPaymentId?: string;
   amount: Money;
+  currency: "INR";
   method: PaymentMethod;
   status: PaymentStatus;
   /** Gateway reference — provider added in a later phase. */
-  providerRef?: string;
+  metadata?: Record<string, string | number | boolean | null>;
+  failureCode?: string;
+  failureMessage?: string;
+}
+
+export interface PaymentAttempt extends Timestamps {
+  id: ID;
+  paymentId: ID;
+  orderId: ID;
+  provider: PaymentProvider;
+  providerReference?: string;
+  amount: Money;
+  currency: "INR";
+  status: PaymentAttemptStatus;
+  idempotencyKey: string;
+  failureCode?: string;
+  failureMessage?: string;
+  metadata?: Record<string, string | number | boolean | null>;
+}
+
+export interface PaymentActivity {
+  id: ID;
+  paymentId: ID;
+  orderId: ID;
+  type: PaymentActivityType;
+  actorUserId?: ID;
+  fromStatus?: PaymentStatus;
+  toStatus?: PaymentStatus;
+  metadata?: Record<string, string | number | boolean | null>;
+  createdAt: ISODateTime;
+}
+
+export interface PaymentWebhookEvent extends Timestamps {
+  id: ID;
+  provider: PaymentProvider;
+  providerEventId: string;
+  paymentId?: ID;
+  orderId?: ID;
+  eventType: string;
+  processedAt?: ISODateTime;
+  metadata?: Record<string, string | number | boolean | null>;
 }
 
 // ── Services: appointments & alterations ────────────────────────────

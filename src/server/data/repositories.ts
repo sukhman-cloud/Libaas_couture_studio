@@ -15,6 +15,11 @@ import type {
   OrderActivity,
   OrderNote,
   OrderStatus,
+  Payment,
+  PaymentActivity,
+  PaymentAttempt,
+  PaymentStatus,
+  PaymentWebhookEvent,
   CustomizationActivity,
   CustomizationNote,
   CustomizationStatus,
@@ -239,6 +244,38 @@ export interface OrderNoteRepository {
   create(note: OrderNote): Promise<OrderNote>;
 }
 
+export interface PaymentRepository {
+  getById(id: ID): Promise<Payment | null>;
+  getByOrderId(orderId: ID): Promise<Payment | null>;
+  listByOrderIds(orderIds: ID[]): Promise<Payment[]>;
+  create(payment: Payment): Promise<Payment>;
+  update(payment: Payment): Promise<Payment>;
+  transitionStatus(
+    paymentId: ID,
+    expectedStatus: PaymentStatus,
+    nextStatus: PaymentStatus,
+    updatedAt: string,
+  ): Promise<Payment | null>;
+}
+
+export interface PaymentAttemptRepository {
+  listByPaymentId(paymentId: ID): Promise<PaymentAttempt[]>;
+  getByIdempotencyKey(paymentId: ID, idempotencyKey: string): Promise<PaymentAttempt | null>;
+  create(attempt: PaymentAttempt): Promise<PaymentAttempt>;
+  update(attempt: PaymentAttempt): Promise<PaymentAttempt>;
+}
+
+export interface PaymentActivityRepository {
+  listByPaymentId(paymentId: ID): Promise<PaymentActivity[]>;
+  create(activity: PaymentActivity): Promise<PaymentActivity>;
+}
+
+export interface PaymentWebhookEventRepository {
+  getByProviderEvent(provider: PaymentWebhookEvent["provider"], providerEventId: string): Promise<PaymentWebhookEvent | null>;
+  create(event: PaymentWebhookEvent): Promise<PaymentWebhookEvent>;
+  markProcessed(id: ID, processedAt: string, paymentId?: ID, orderId?: ID): Promise<PaymentWebhookEvent | null>;
+}
+
 export interface AppointmentRepository {
   list(params?: ListParams): Promise<Appointment[]>;
   count(): Promise<number>;
@@ -353,6 +390,10 @@ export interface StoreRepositories {
   customizationNotes: CustomizationNoteRepository;
   orderActivities: OrderActivityRepository;
   orderNotes: OrderNoteRepository;
+  payments: PaymentRepository;
+  paymentAttempts: PaymentAttemptRepository;
+  paymentActivities: PaymentActivityRepository;
+  paymentWebhookEvents: PaymentWebhookEventRepository;
 }
 
 export interface Repositories extends StoreRepositories {

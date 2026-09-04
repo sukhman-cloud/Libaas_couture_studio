@@ -13,6 +13,7 @@ import {
 } from "@/server/commerce/service";
 import { getRepositories } from "@/server/data";
 import { customerLockKey, withLock } from "@/server/lock";
+import { getOwnPaymentForOrder, type PaymentView } from "@/server/payments/service";
 import type {
   Money,
   Order,
@@ -568,6 +569,8 @@ export interface CustomerOrderDetail {
   total: Money;
   itemCount: number;
   totalQuantity: number;
+  /** Null when the order has no payment record yet — never fabricated. */
+  payment: PaymentView | null;
   customizationRequests: Array<{
     id: string;
     status: string;
@@ -722,6 +725,7 @@ export async function getOwnOrderDetail(
     total: order.total,
     itemCount: order.items.length,
     totalQuantity: order.items.reduce((sum, i) => sum + i.quantity, 0),
+    payment: await getOwnPaymentForOrder(userId, order),
     customizationRequests: requests.map((request) => ({
       id: request.id,
       status: request.status,

@@ -66,6 +66,10 @@ const COLLECTIONS = [
   "orderNotes",
   "customizationActivities",
   "customizationNotes",
+  "payments",
+  "paymentAttempts",
+  "paymentActivities",
+  "paymentWebhookEvents",
 ];
 
 for (const key of COLLECTIONS) {
@@ -631,6 +635,106 @@ for (const note of orderNotes) {
   if (typeof note.authorName !== "string" || !note.authorName.trim()) problem("shape", `OrderNote ${note.id}: authorName is missing.`);
   if (typeof note.body !== "string" || !note.body.trim() || note.body.length > 2000) problem("shape", `OrderNote ${note.id}: body is empty or over 2000 chars.`);
   if (note.authorUserId && !userIds.has(note.authorUserId)) problem("orphan", `OrderNote ${note.id} references missing author ${note.authorUserId}.`);
+}
+
+/* ── payments (Phase 10 foundation) ─────────────────────────────── */
+
+const PAYMENT_STATUSES = new Set([
+  "unpaid", "pending", "authorized", "paid", "failed", "cancelled", "refunded",
+]);
+const PAYMENT_PROVIDERS = new Set(["manual", "cash_on_delivery", "online_gateway"]);
+const PAYMENT_ATTEMPT_STATUSES = new Set(["pending", "authorized", "paid", "failed", "cancelled"]);
+
+const payments = rows("payments");
+checkIds(payments, "payments");
+checkTimestamps(payments, "payment");
+checkDuplicates(payments, "payments", (p) => p.orderId, "orderId");
+for (const payment of payments) {
+  if (!orderIds.has(payment.orderId)) {
+    problem("orphan", `Payment ${payment.id} references missing order ${payment.orderId}.`);
+  }
+  if (!PAYMENT_STATUSES.has(payment.status)) {
+    problem("shape", `Payment ${payment.id}: unknown status "${payment.status}".`);
+  }
+  if (!PAYMENT_PROVIDERS.has(payment.provider)) {
+    problem("shape", `Payment ${payment.id}: unknown provider "${payment.provider}".`);
+  }
+  if (!PAYMENT_PROVIDERS.has(payment.method)) {
+    problem("shape", `Payment ${payment.id}: unknown method "${payment.method}".`);
+  }
+  checkMoney(payment.amount, `Payment ${payment.id} amount`);
+  const order = orders.find((o) => o.id === payment.orderId);
+  if (order && payment.amount && order.total && payment.amount.amount !== order.total.amount) {
+    problem(
+      "money",
+      `Payment ${payment.id}: amount ${payment.amount.amount} does not match order ${order.id} total ${order.total.amount}.`,
+    );
+  }
+}
+
+const paymentIds = new Set(payments.map((p) => p.id));
+const paymentAttempts = rows("paymentAttempts");
+checkIds(paymentAttempts, "paymentAttempts");
+checkTimestamps(paymentAttempts, "paymentAttempt");
+checkDuplicates(
+  paymentAttempts,
+  "paymentAttempts",
+  (a) => `${a.paymentId}::${a.idempotencyKey}`,
+  "payment + idempotency key",
+);
+for (const attempt of paymentAttempts) {
+  if (!paymentIds.has(attempt.paymentId)) {
+    problem("orphan", `PaymentAttempt ${attempt.id} references missing payment ${attempt.paymentId}.`);
+  }
+  if (!orderIds.has(attempt.orderId)) {
+    problem("orphan", `PaymentAttempt ${attempt.id} references missing order ${attempt.orderId}.`);
+  }
+  if (!PAYMENT_ATTEMPT_STATUSES.has(attempt.status)) {
+    problem("shape", `PaymentAttempt ${attempt.id}: unknown status "${attempt.status}".`);
+  }
+  checkMoney(attempt.amount, `PaymentAttempt ${attempt.id} amount`);
+}
+
+const paymentActivities = rows("paymentActivities");
+checkIds(paymentActivities, "paymentActivities");
+checkTimestamps(paymentActivities, "paymentActivity", { requireUpdated: false });
+for (const activity of paymentActivities) {
+  if (!paymentIds.has(activity.paymentId)) {
+    problem("orphan", `PaymentActivity ${activity.id} references missing payment ${activity.paymentId}.`);
+  }
+  if (!orderIds.has(activity.orderId)) {
+    problem("orphan", `PaymentActivity ${activity.id} references missing order ${activity.orderId}.`);
+  }
+  if (activity.fromStatus && !PAYMENT_STATUSES.has(activity.fromStatus)) {
+    problem("shape", `PaymentActivity ${activity.id}: invalid fromStatus.`);
+  }
+  if (activity.toStatus && !PAYMENT_STATUSES.has(activity.toStatus)) {
+    problem("shape", `PaymentActivity ${activity.id}: invalid toStatus.`);
+  }
+  if (activity.actorUserId && !userIds.has(activity.actorUserId)) {
+    problem("orphan", `PaymentActivity ${activity.id} references missing actor ${activity.actorUserId}.`);
+  }
+}
+
+const paymentWebhookEvents = rows("paymentWebhookEvents");
+checkIds(paymentWebhookEvents, "paymentWebhookEvents");
+checkTimestamps(paymentWebhookEvents, "paymentWebhookEvent");
+checkDuplicates(
+  paymentWebhookEvents,
+  "paymentWebhookEvents",
+  (e) => `${e.provider}::${e.providerEventId}`,
+  "provider + providerEventId",
+);
+for (const event of paymentWebhookEvents) {
+  if (!PAYMENT_PROVIDERS.has(event.provider)) {
+    problem("shape", `PaymentWebhookEvent ${event.id}: unknown provider "${event.provider}".`);
+  }
+  if (event.paymentId && !paymentIds.has(event.paymentId)) {
+    problem("orphan", `PaymentWebhookEvent ${event.id} references missing payment ${event.paymentId}.`);
+  }
+  if (event.orderId && !orderIds.has(event.orderId)) {
+    problem("orphan", `PaymentWebhookEvent ${event.id} references missing order ${event.orderId}.`);
+  }
 }
 
 /* ── customization requests (Phase 7B foundation) ───────────────── */

@@ -21,6 +21,11 @@ import {
   isAllowedStatusTransition,
   ORDER_STATUSES,
 } from "@/server/orders/workflow";
+import {
+  getAdminPaymentForOrder,
+  recordManualPayment,
+  type AdminPaymentView,
+} from "@/server/payments/service";
 
 /**
  * Admin order reading (Phase 7C) — the studio's fulfillment view.
@@ -115,6 +120,9 @@ export interface AdminOrderDetail {
   totalQuantity: number;
   activities: AdminOrderActivityView[];
   notes: AdminOrderNoteView[];
+  /** Null when the order has no payment record yet (pre-Phase-10 history
+   *  or a failed initiation) — never fabricated. */
+  payment: AdminPaymentView | null;
   customizationRequests: Array<{
     id: string;
     status: string;
@@ -223,10 +231,11 @@ export async function getAdminOrderByNumber(
   if (!isOrderNumber(orderNumber)) return null;
   const order = await getRepositories().orders.getByOrderNumber(orderNumber);
   if (!order) return null;
-  const [items, activities, notes] = await Promise.all([
+  const [items, activities, notes, payment] = await Promise.all([
     buildAdminItemViews(order),
     getRepositories().orderActivities.listByOrderId(order.id),
     getRepositories().orderNotes.listByOrderId(order.id),
+    getAdminPaymentForOrder(order),
   ]);
   const customizationRequests = (await getRepositories().customizationRequests.list()).filter(
     (request) => request.orderId === order.id,
@@ -253,6 +262,7 @@ export async function getAdminOrderByNumber(
       body: note.body,
       createdAt: note.createdAt,
     })),
+    payment,
     customizationRequests: customizationRequests.map((request) => ({
       id: request.id,
       status: request.status,
@@ -354,4 +364,28 @@ export async function addAdminOrderNote(
       error: error instanceof Error ? error.message : "Could not save the note.",
     };
   }
+}
+
+/**
+ * Admin-only manual/offline payment recording (Phase 10 foundation). The
+ * amount is always the order's authoritative total — there is no input for
+ * a different figure — and the transition is validated against the same
+ * payment state machine every other payment mutation uses.
+ */
+export async function recordAdminManualPayment(
+  orderNumber: string,
+): Promise<AdminOrderMutationResult> {
+  const auth = await authorizeAdmin("payments.write");
+  if (!auth.ok) return { ok: false, error: auth.error };
+  if (!isOrderNumber(orderNumber)) return { ok: false, error: "Order not found." };
+
+  const order = await getRepositories().orders.getByOrderNumber(orderNumber);
+  if (!order) return { ok: false, error: "Order not found." };
+
+  const result = await recordManualPayment({
+    orderId: order.id,
+    ...(auth.session.sub === "dev-admin" ? {} : { actorUserId: auth.session.sub }),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
 }

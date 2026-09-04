@@ -61,6 +61,12 @@ import {
   WISHLIST_INCLUDE,
   wishlistColumns,
   wishlistItemRows,
+  toPayment,
+  toPaymentAttempt,
+  toPaymentActivity,
+  toPaymentWebhookEvent,
+  paymentColumns,
+  paymentAttemptColumns,
 } from "@/server/data/postgres/mappers";
 import type { CatalogStatus } from "@/types/domain";
 
@@ -548,6 +554,156 @@ function buildPostgresRepositories(db: Db): StoreRepositories {
           },
         });
         return toOrderNote(row);
+      },
+    },
+
+    payments: {
+      async getById(id) {
+        const row = await db.payment.findUnique({ where: { id } });
+        return row ? toPayment(row) : null;
+      },
+      async getByOrderId(orderId) {
+        const row = await db.payment.findUnique({ where: { orderId } });
+        return row ? toPayment(row) : null;
+      },
+      async listByOrderIds(orderIds) {
+        const rows = await db.payment.findMany({
+          where: { orderId: { in: orderIds } },
+        });
+        return rows.map(toPayment);
+      },
+      async create(payment) {
+        // orderId uniqueness (one payment per order) is enforced by the
+        // database constraint; a violation surfaces as P2002.
+        const row = await db.payment.create({
+          data: { id: payment.id, ...paymentColumns(payment) },
+        });
+        return toPayment(row);
+      },
+      async update(payment) {
+        return toPayment(
+          await orNotFound(
+            db.payment.update({
+              where: { id: payment.id },
+              data: paymentColumns(payment),
+            }),
+            "Payment",
+            payment.id,
+          ),
+        );
+      },
+      async transitionStatus(paymentId, expectedStatus, nextStatus, updatedAt) {
+        const result = await db.payment.updateMany({
+          where: { id: paymentId, status: expectedStatus },
+          data: { status: nextStatus, updatedAt: new Date(updatedAt) },
+        });
+        if (result.count === 0) return null;
+        const row = await db.payment.findUniqueOrThrow({ where: { id: paymentId } });
+        return toPayment(row);
+      },
+    },
+
+    paymentAttempts: {
+      async listByPaymentId(paymentId) {
+        const rows = await db.paymentAttempt.findMany({
+          where: { paymentId },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        });
+        return rows.map(toPaymentAttempt);
+      },
+      async getByIdempotencyKey(paymentId, idempotencyKey) {
+        const row = await db.paymentAttempt.findUnique({
+          where: { paymentId_idempotencyKey: { paymentId, idempotencyKey } },
+        });
+        return row ? toPaymentAttempt(row) : null;
+      },
+      async create(attempt) {
+        // (paymentId, idempotencyKey) uniqueness is enforced by the database
+        // constraint; a violation surfaces as P2002.
+        const row = await db.paymentAttempt.create({
+          data: { id: attempt.id, ...paymentAttemptColumns(attempt) },
+        });
+        return toPaymentAttempt(row);
+      },
+      async update(attempt) {
+        return toPaymentAttempt(
+          await orNotFound(
+            db.paymentAttempt.update({
+              where: { id: attempt.id },
+              data: paymentAttemptColumns(attempt),
+            }),
+            "Payment attempt",
+            attempt.id,
+          ),
+        );
+      },
+    },
+
+    paymentActivities: {
+      async listByPaymentId(paymentId) {
+        const rows = await db.paymentActivity.findMany({
+          where: { paymentId },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        });
+        return rows.map(toPaymentActivity);
+      },
+      async create(activity) {
+        const row = await db.paymentActivity.create({
+          data: {
+            id: activity.id,
+            paymentId: activity.paymentId,
+            orderId: activity.orderId,
+            type: activity.type,
+            actorUserId: activity.actorUserId ?? null,
+            fromStatus: activity.fromStatus ?? null,
+            toStatus: activity.toStatus ?? null,
+            metadata: activity.metadata ?? Prisma.DbNull,
+            createdAt: new Date(activity.createdAt),
+          },
+        });
+        return toPaymentActivity(row);
+      },
+    },
+
+    paymentWebhookEvents: {
+      async getByProviderEvent(provider, providerEventId) {
+        const row = await db.paymentWebhookEvent.findUnique({
+          where: { provider_providerEventId: { provider, providerEventId } },
+        });
+        return row ? toPaymentWebhookEvent(row) : null;
+      },
+      async create(event) {
+        // (provider, providerEventId) uniqueness is enforced by the database
+        // constraint; a violation surfaces as P2002.
+        const row = await db.paymentWebhookEvent.create({
+          data: {
+            id: event.id,
+            provider: event.provider,
+            providerEventId: event.providerEventId,
+            paymentId: event.paymentId ?? null,
+            orderId: event.orderId ?? null,
+            eventType: event.eventType,
+            processedAt: event.processedAt ? new Date(event.processedAt) : null,
+            metadata: event.metadata ?? Prisma.DbNull,
+            createdAt: new Date(event.createdAt),
+            updatedAt: new Date(event.updatedAt),
+          },
+        });
+        return toPaymentWebhookEvent(row);
+      },
+      async markProcessed(id, processedAt, paymentId, orderId) {
+        const result = await db.paymentWebhookEvent.updateMany({
+          where: { id },
+          data: {
+            processedAt: new Date(processedAt),
+            updatedAt: new Date(processedAt),
+            ...(paymentId ? { paymentId } : {}),
+            ...(orderId ? { orderId } : {}),
+          },
+        });
+        if (result.count === 0) return null;
+        const row = await db.paymentWebhookEvent.findUniqueOrThrow({ where: { id } });
+        return toPaymentWebhookEvent(row);
       },
     },
 

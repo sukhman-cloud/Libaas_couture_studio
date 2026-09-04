@@ -5,7 +5,9 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ImageOff } from "lucide-react";
 import { OrderItemConfiguration } from "@/components/orders/order-item-configuration";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
+import { PaymentStatusBadge } from "@/components/orders/payment-status-badge";
 import { OrderOperations } from "@/components/admin/order-operations";
+import { PaymentOperations } from "@/components/admin/payment-operations";
 import { buttonStyles } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -55,12 +57,70 @@ export default async function AdminOrderDetailPage({
             Back to orders
           </Link>
         }
-        actions={<OrderStatusBadge status={order.status} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <OrderStatusBadge status={order.status} />
+            <PaymentStatusBadge status={order.payment?.status ?? null} />
+          </div>
+        }
       />
 
       <div className="space-y-5">
         <div className="grid gap-5 lg:grid-cols-2">
           <Card>
+            <CardContent className="space-y-2 p-4 sm:p-5">
+              <Heading level={2} className="text-lg">
+                Payment
+              </Heading>
+              {order.payment ? (
+                <>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted">Status</span>
+                    <PaymentStatusBadge status={order.payment.status} />
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted">Method</span>
+                    <span className="capitalize">
+                      {order.payment.method.replace(/_/g, " ")}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted">Amount</span>
+                    <span className="tabular-nums">
+                      {formatPrice(order.payment.amount.amount, order.payment.currency)}
+                    </span>
+                  </div>
+                  {order.payment.providerPaymentId && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted">Provider reference</span>
+                      <span className="font-mono text-xs">
+                        {order.payment.providerPaymentId}
+                      </span>
+                    </div>
+                  )}
+                  {order.payment.attempts.length > 0 && (
+                    <div className="border-t border-cream-200 pt-2">
+                      <Caption className="mb-1 block">Attempts</Caption>
+                      <ul className="space-y-1">
+                        {order.payment.attempts.map((attempt, index) => (
+                          <li key={index} className="flex justify-between text-xs text-muted">
+                            <span>
+                              {attempt.provider.replace(/_/g, " ")} · {attempt.status}
+                            </span>
+                            <span>{formatDate(attempt.createdAt)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <Text tone="muted" size="sm">
+                  No payment record for this order yet.
+                </Text>
+              )}
+            </CardContent>
+          </Card>
 
           {order.customizationRequests.length > 0 && (
             <Card>
@@ -83,6 +143,8 @@ export default async function AdminOrderDetailPage({
               </CardContent>
             </Card>
           )}
+
+          <Card>
             <CardContent className="p-4 sm:p-5">
               <Heading level={2} className="mb-2 text-lg">
                 Customer
@@ -241,6 +303,11 @@ export default async function AdminOrderDetailPage({
         <OrderOperations
           orderNumber={order.orderNumber}
           nextStatuses={allowedNextStatuses(order.status)}
+        />
+
+        <PaymentOperations
+          orderNumber={order.orderNumber}
+          status={order.payment?.status ?? null}
         />
 
         {(order.activities.length > 0 || order.notes.length > 0) && (

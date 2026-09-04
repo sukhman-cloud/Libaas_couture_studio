@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, ImageOff } from "lucide-react";
 import { OrderItemConfiguration } from "@/components/orders/order-item-configuration";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
+import { PaymentStatusBadge } from "@/components/orders/payment-status-badge";
 import { buttonStyles } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -61,7 +62,12 @@ export default async function OrderDetailPage({
             Back to orders
           </Link>
         }
-        actions={<OrderStatusBadge status={order.status} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <OrderStatusBadge status={order.status} />
+            <PaymentStatusBadge status={order.payment?.status ?? null} />
+          </div>
+        }
       />
 
       <div className="space-y-5">
@@ -251,10 +257,42 @@ export default async function OrderDetailPage({
                   {order.customer.phone}
                 </Text>
               )}
-              <Text tone="muted" size="sm" className="mt-2">
-                No payment has been taken online — the studio confirms
-                payment and delivery with you.
-              </Text>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4 sm:p-5">
+              <Heading level={2} className="mb-2 text-lg">
+                Payment
+              </Heading>
+              {order.payment ? (
+                <>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted">Status</span>
+                    <PaymentStatusBadge status={order.payment.status} />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-sm">
+                    <span className="text-muted">
+                      {order.payment.status === "paid" ? "Amount paid" : "Amount due"}
+                    </span>
+                    <span className="tabular-nums font-medium text-navy-800">
+                      {formatPrice(order.payment.amount.amount, order.payment.currency)}
+                    </span>
+                  </div>
+                  <Text tone="muted" size="sm" className="mt-3">
+                    {order.payment.method === "cash_on_delivery"
+                      ? "Pay by cash or the method the studio confirms with you on delivery."
+                      : order.payment.status === "paid"
+                        ? "Payment has been received for this order."
+                        : "The studio will confirm payment and delivery with you."}
+                  </Text>
+                </>
+              ) : (
+                <Text tone="muted" size="sm">
+                  Payment information is not available for this order. The
+                  studio will confirm payment and delivery with you.
+                </Text>
+              )}
             </CardContent>
           </Card>
         </div>

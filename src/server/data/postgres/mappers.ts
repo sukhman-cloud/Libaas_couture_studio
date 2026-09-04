@@ -1,5 +1,5 @@
 import "server-only";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import type {
   AuthCredential,
   Cart,
@@ -18,6 +18,10 @@ import type {
   OrderItem,
   OrderNote,
   PasswordResetToken,
+  Payment,
+  PaymentActivity,
+  PaymentAttempt,
+  PaymentWebhookEvent,
   Product,
   ProductAttributes,
   ProductMedia,
@@ -820,4 +824,123 @@ export function wishlistItemRows(wishlist: Wishlist) {
     position,
     createdAt: new Date(item.createdAt),
   }));
+}
+
+/* ── payments (Phase 10) ────────────────────────────────────────── */
+
+export function toPayment(row: Prisma.PaymentGetPayload<object>): Payment {
+  const currency = row.currency as Payment["currency"];
+  return {
+    id: row.id,
+    orderId: row.orderId,
+    provider: row.provider,
+    ...opt("providerPaymentId", row.providerPaymentId),
+    amount: { amount: moneyAmount(row.amount), currency },
+    currency,
+    method: row.method,
+    status: row.status,
+    ...(row.metadata === null
+      ? {}
+      : { metadata: row.metadata as Payment["metadata"] }),
+    ...opt("failureCode", row.failureCode),
+    ...opt("failureMessage", row.failureMessage),
+    createdAt: iso(row.createdAt),
+    updatedAt: iso(row.updatedAt),
+  };
+}
+
+export function paymentColumns(payment: Payment) {
+  return {
+    orderId: payment.orderId,
+    provider: payment.provider,
+    providerPaymentId: payment.providerPaymentId ?? null,
+    amount: BigInt(payment.amount.amount),
+    currency: payment.currency,
+    method: payment.method,
+    status: payment.status,
+    metadata: payment.metadata ?? Prisma.DbNull,
+    failureCode: payment.failureCode ?? null,
+    failureMessage: payment.failureMessage ?? null,
+    createdAt: new Date(payment.createdAt),
+    updatedAt: new Date(payment.updatedAt),
+  };
+}
+
+export function toPaymentAttempt(
+  row: Prisma.PaymentAttemptGetPayload<object>,
+): PaymentAttempt {
+  const currency = row.currency as PaymentAttempt["currency"];
+  return {
+    id: row.id,
+    paymentId: row.paymentId,
+    orderId: row.orderId,
+    provider: row.provider,
+    ...opt("providerReference", row.providerReference),
+    amount: { amount: moneyAmount(row.amount), currency },
+    currency,
+    status: row.status,
+    idempotencyKey: row.idempotencyKey,
+    ...opt("failureCode", row.failureCode),
+    ...opt("failureMessage", row.failureMessage),
+    ...(row.metadata === null
+      ? {}
+      : { metadata: row.metadata as PaymentAttempt["metadata"] }),
+    createdAt: iso(row.createdAt),
+    updatedAt: iso(row.updatedAt),
+  };
+}
+
+export function paymentAttemptColumns(attempt: PaymentAttempt) {
+  return {
+    paymentId: attempt.paymentId,
+    orderId: attempt.orderId,
+    provider: attempt.provider,
+    providerReference: attempt.providerReference ?? null,
+    amount: BigInt(attempt.amount.amount),
+    currency: attempt.currency,
+    status: attempt.status,
+    idempotencyKey: attempt.idempotencyKey,
+    failureCode: attempt.failureCode ?? null,
+    failureMessage: attempt.failureMessage ?? null,
+    metadata: attempt.metadata ?? Prisma.DbNull,
+    createdAt: new Date(attempt.createdAt),
+    updatedAt: new Date(attempt.updatedAt),
+  };
+}
+
+export function toPaymentActivity(
+  row: Prisma.PaymentActivityGetPayload<object>,
+): PaymentActivity {
+  return {
+    id: row.id,
+    paymentId: row.paymentId,
+    orderId: row.orderId,
+    type: row.type as PaymentActivity["type"],
+    ...opt("actorUserId", row.actorUserId),
+    ...opt("fromStatus", row.fromStatus),
+    ...opt("toStatus", row.toStatus),
+    ...(row.metadata === null
+      ? {}
+      : { metadata: row.metadata as PaymentActivity["metadata"] }),
+    createdAt: iso(row.createdAt),
+  };
+}
+
+export function toPaymentWebhookEvent(
+  row: Prisma.PaymentWebhookEventGetPayload<object>,
+): PaymentWebhookEvent {
+  return {
+    id: row.id,
+    provider: row.provider,
+    providerEventId: row.providerEventId,
+    ...opt("paymentId", row.paymentId),
+    ...opt("orderId", row.orderId),
+    eventType: row.eventType,
+    ...optDate("processedAt", row.processedAt),
+    ...(row.metadata === null
+      ? {}
+      : { metadata: row.metadata as PaymentWebhookEvent["metadata"] }),
+    createdAt: iso(row.createdAt),
+    updatedAt: iso(row.updatedAt),
+  };
 }

@@ -9,6 +9,7 @@ import { createOrderFromCheckout } from "@/server/orders/service";
 import { effectivePriceOf, isPurchasable } from "@/server/commerce/service";
 import { getRepositories } from "@/server/data";
 import { customerLockKey, withLock } from "@/server/lock";
+import { initiatePayment } from "@/server/payments/service";
 
 /**
  * Checkout mutations (Phase 6A).
@@ -181,6 +182,27 @@ export async function confirmCheckout(
       if (specific) return { error: specific };
     }
     return { error: result.message };
+  }
+
+  // Start the payment record for the new order. This checkout offers no
+  // payment-method choice today — every order is studio-confirmed cash on
+  // delivery — so the payment is initiated automatically as "unpaid" and
+  // never claims a payment succeeded. A failure here must never block the
+  // order the customer already has; it just leaves the payment record to
+  // be created lazily the next time it is read.
+  const placedOrder = await getRepositories().orders.getByOrderNumber(
+    result.order.orderNumber,
+  );
+  if (placedOrder) {
+    const paymentResult = await initiatePayment({
+      orderId: placedOrder.id,
+      provider: "cash_on_delivery",
+    });
+    if (paymentResult.outcome === "failed") {
+      console.error(
+        `[checkout] payment initiation failed for order ${placedOrder.orderNumber}: ${paymentResult.message}`,
+      );
+    }
   }
 
   revalidatePath("/cart");

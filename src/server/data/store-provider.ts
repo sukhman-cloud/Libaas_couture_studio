@@ -17,6 +17,10 @@ import type {
   OrderActivity,
   OrderNote,
   PasswordResetToken,
+  Payment,
+  PaymentActivity,
+  PaymentAttempt,
+  PaymentWebhookEvent,
   Product,
   User,
   Wishlist,
@@ -47,7 +51,7 @@ import { withLock } from "@/server/lock";
  */
 
 /** Bump when the persisted shape changes; add a step to `migrateStore`. */
-export const STORE_VERSION = 7;
+export const STORE_VERSION = 8;
 
 export interface DataStore {
   version: number;
@@ -67,6 +71,10 @@ export interface DataStore {
   customizationRequests: CustomizationRequest[];
   orderActivities: OrderActivity[];
   orderNotes: OrderNote[];
+  payments: Payment[];
+  paymentAttempts: PaymentAttempt[];
+  paymentActivities: PaymentActivity[];
+  paymentWebhookEvents: PaymentWebhookEvent[];
   customizationActivities: CustomizationActivity[];
   customizationNotes: CustomizationNote[];
 }
@@ -90,6 +98,10 @@ export function emptyStore(): DataStore {
     customizationRequests: [],
     orderActivities: [],
     orderNotes: [],
+    payments: [],
+    paymentAttempts: [],
+    paymentActivities: [],
+    paymentWebhookEvents: [],
     customizationActivities: [],
     customizationNotes: [],
   };
@@ -121,6 +133,10 @@ const STORE_COLLECTION_KEYS = [
   "customizationRequests",
   "orderActivities",
   "orderNotes",
+  "payments",
+  "paymentAttempts",
+  "paymentActivities",
+  "paymentWebhookEvents",
   "customizationActivities",
   "customizationNotes",
 ] as const;
@@ -538,6 +554,136 @@ function buildStoreRepositories(
       },
       async create(note) {
         return insert(store.orderNotes, note);
+      },
+    },
+
+    payments: {
+      async getById(id) {
+        return store.payments.find((payment) => payment.id === id) ?? null;
+      },
+      async getByOrderId(orderId) {
+        return store.payments.find((payment) => payment.orderId === orderId) ?? null;
+      },
+      async listByOrderIds(orderIds) {
+        const wanted = new Set(orderIds);
+        return store.payments.filter((payment) => wanted.has(payment.orderId));
+      },
+      async create(payment) {
+        return guard(async () => {
+          if (store.payments.some((row) => row.orderId === payment.orderId)) {
+            throw new Error(`Payment already exists for order: ${payment.orderId}`);
+          }
+          store.payments.push(payment);
+          await persistOrRollback(() => {
+            const index = store.payments.lastIndexOf(payment);
+            if (index !== -1) store.payments.splice(index, 1);
+          });
+          return payment;
+        });
+      },
+      async update(payment) {
+        return replace(store.payments, payment, "Payment");
+      },
+      async transitionStatus(paymentId, expectedStatus, nextStatus, updatedAt) {
+        return guard(async () => {
+          const payment = store.payments.find((row) => row.id === paymentId);
+          if (!payment || payment.status !== expectedStatus) return null;
+          payment.status = nextStatus;
+          payment.updatedAt = updatedAt;
+          return payment;
+        });
+      },
+    },
+
+    paymentAttempts: {
+      async listByPaymentId(paymentId) {
+        return store.paymentAttempts
+          .filter((attempt) => attempt.paymentId === paymentId)
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+      },
+      async getByIdempotencyKey(paymentId, idempotencyKey) {
+        return (
+          store.paymentAttempts.find(
+            (attempt) =>
+              attempt.paymentId === paymentId &&
+              attempt.idempotencyKey === idempotencyKey,
+          ) ?? null
+        );
+      },
+      async create(attempt) {
+        return guard(async () => {
+          if (
+            store.paymentAttempts.some(
+              (row) =>
+                row.paymentId === attempt.paymentId &&
+                row.idempotencyKey === attempt.idempotencyKey,
+            )
+          ) {
+            throw new Error("Duplicate payment attempt idempotency key.");
+          }
+          store.paymentAttempts.push(attempt);
+          await persistOrRollback(() => {
+            const index = store.paymentAttempts.lastIndexOf(attempt);
+            if (index !== -1) store.paymentAttempts.splice(index, 1);
+          });
+          return attempt;
+        });
+      },
+      async update(attempt) {
+        return replace(store.paymentAttempts, attempt, "Payment attempt");
+      },
+    },
+
+    paymentActivities: {
+      async listByPaymentId(paymentId) {
+        return store.paymentActivities
+          .filter((activity) => activity.paymentId === paymentId)
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+      },
+      async create(activity) {
+        return insert(store.paymentActivities, activity);
+      },
+    },
+
+    paymentWebhookEvents: {
+      async getByProviderEvent(provider, providerEventId) {
+        return (
+          store.paymentWebhookEvents.find(
+            (event) =>
+              event.provider === provider &&
+              event.providerEventId === providerEventId,
+          ) ?? null
+        );
+      },
+      async create(event) {
+        return guard(async () => {
+          if (
+            store.paymentWebhookEvents.some(
+              (row) =>
+                row.provider === event.provider &&
+                row.providerEventId === event.providerEventId,
+            )
+          ) {
+            throw new Error("Duplicate payment webhook event.");
+          }
+          store.paymentWebhookEvents.push(event);
+          await persistOrRollback(() => {
+            const index = store.paymentWebhookEvents.lastIndexOf(event);
+            if (index !== -1) store.paymentWebhookEvents.splice(index, 1);
+          });
+          return event;
+        });
+      },
+      async markProcessed(id, processedAt, paymentId, orderId) {
+        return guard(async () => {
+          const event = store.paymentWebhookEvents.find((row) => row.id === id);
+          if (!event) return null;
+          event.processedAt = processedAt;
+          event.updatedAt = processedAt;
+          if (paymentId) event.paymentId = paymentId;
+          if (orderId) event.orderId = orderId;
+          return event;
+        });
       },
     },
 

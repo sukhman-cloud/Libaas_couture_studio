@@ -102,6 +102,36 @@ enum OrderStatus {
   @@map("order_status")
 }
 
+enum PaymentStatus {
+  unpaid
+  pending
+  authorized
+  paid
+  failed
+  cancelled
+  refunded
+
+  @@map("payment_status")
+}
+
+enum PaymentProvider {
+  manual
+  cash_on_delivery
+  online_gateway
+
+  @@map("payment_provider")
+}
+
+enum PaymentAttemptStatus {
+  pending
+  authorized
+  paid
+  failed
+  cancelled
+
+  @@map("payment_attempt_status")
+}
+
 // ── Identity ────────────────────────────────────────────────────────
 
 model User {
@@ -126,6 +156,7 @@ model User {
   orderNotes            OrderNote[]            @relation("OrderNoteAuthor")
   customizationActivities CustomizationActivity[] @relation("CustomizationActivityActor")
   customizationNotes      CustomizationNote[]      @relation("CustomizationNoteAuthor")
+  paymentActivities       PaymentActivity[]        @relation("PaymentActivityActor")
 
   @@map("users")
 }
@@ -620,6 +651,7 @@ model Order {
   activities OrderActivity[]
   notes      OrderNote[]
   customizationRequests CustomizationRequest[] @relation("CustomizationOrder")
+  payment    Payment?
 
   @@unique([userId, idempotencyKey])
   @@index([userId])
@@ -726,4 +758,111 @@ model CustomizationNote {
 
   @@index([customizationRequestId, createdAt])
   @@map("customization_notes")
+}
+
+// ── Payments (Phase 10 foundation) ─────────────────────────────────
+
+/// One payment record per order — the order's payment state, separate from
+/// OrderStatus. No real gateway exists yet: `provider` is `manual`,
+/// `cash_on_delivery` or `online_gateway`, and an `online_gateway` payment
+/// stops at `pending`/`unpaid` until a real integration lands. Never a raw
+/// card number, CVV or bank credential — only a provider-issued reference.
+model Payment {
+  id      String @id
+  orderId String @unique @map("order_id")
+
+  provider          PaymentProvider
+  providerPaymentId String?         @map("provider_payment_id")
+
+  amount   BigInt @map("amount")
+  currency String
+
+  method PaymentProvider
+  status PaymentStatus
+
+  metadata       Json?
+  failureCode    String? @map("failure_code")
+  failureMessage String? @map("failure_message")
+
+  createdAt DateTime @map("created_at")
+  updatedAt DateTime @map("updated_at")
+
+  order     Order              @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  attempts  PaymentAttempt[]
+  activities PaymentActivity[]
+
+  @@map("payments")
+}
+
+/// Append-oriented history of attempts to pay one Payment — never
+/// overwritten, never deleted, even on failure.
+model PaymentAttempt {
+  id        String @id
+  paymentId String @map("payment_id")
+  orderId   String @map("order_id")
+
+  provider          PaymentProvider
+  providerReference String?         @map("provider_reference")
+
+  amount   BigInt @map("amount")
+  currency String
+
+  status PaymentAttemptStatus
+
+  /// Scoped to one payment: the same key can never create two attempt rows
+  /// for that payment (double-click / retry safety).
+  idempotencyKey String @map("idempotency_key")
+
+  failureCode    String? @map("failure_code")
+  failureMessage String? @map("failure_message")
+  metadata       Json?
+
+  createdAt DateTime @map("created_at")
+  updatedAt DateTime @map("updated_at")
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@unique([paymentId, idempotencyKey])
+  @@index([paymentId])
+  @@map("payment_attempts")
+}
+
+/// Append-only operational history for one Payment — mirrors OrderActivity.
+model PaymentActivity {
+  id          String         @id
+  paymentId   String         @map("payment_id")
+  orderId     String         @map("order_id")
+  type        String
+  actorUserId String?        @map("actor_user_id")
+  fromStatus  PaymentStatus? @map("from_status")
+  toStatus    PaymentStatus? @map("to_status")
+  metadata    Json?
+  createdAt   DateTime       @map("created_at")
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  actor   User?   @relation("PaymentActivityActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([paymentId, createdAt])
+  @@map("payment_activities")
+}
+
+/// Foundation for future gateway webhooks — no real provider is wired up
+/// yet. `(provider, providerEventId)` is unique so the same event can never
+/// be applied twice, which is the whole idempotency contract a webhook
+/// handler needs.
+model PaymentWebhookEvent {
+  id              String          @id
+  provider        PaymentProvider
+  providerEventId String          @map("provider_event_id")
+  paymentId       String?         @map("payment_id")
+  orderId         String?         @map("order_id")
+  eventType       String          @map("event_type")
+  processedAt     DateTime?       @map("processed_at")
+  metadata        Json?
+
+  createdAt DateTime @map("created_at")
+  updatedAt DateTime @map("updated_at")
+
+  @@unique([provider, providerEventId])
+  @@map("payment_webhook_events")
 }

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import {
   addAdminOrderNote,
+  recordAdminManualPayment,
   transitionAdminOrder,
   type AdminOrderMutationResult,
 } from "@/server/orders/admin";
@@ -44,6 +45,23 @@ export async function addOrderNoteAction(
   if (result.ok) {
     revalidatePath(`/admin/orders/${orderNumber}`);
     return { ...result, message: "Note added." };
+  }
+  return result;
+}
+
+export async function recordManualPaymentAction(
+  _previous: OrderActionState,
+  formData: FormData,
+): Promise<OrderActionState> {
+  const orderNumber = formData.get("orderNumber");
+  if (typeof orderNumber !== "string") {
+    return { ok: false, error: "Invalid order." };
+  }
+  const result = await recordAdminManualPayment(orderNumber);
+  if (result.ok) {
+    revalidatePath(`/admin/orders/${orderNumber}`);
+    revalidatePath(`/account/orders/${orderNumber}`);
+    return { ...result, message: "Payment recorded as paid." };
   }
   return result;
 }
