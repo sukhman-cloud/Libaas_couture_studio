@@ -11,6 +11,8 @@ import type {
   CustomizationRequest,
   CustomizationActivity,
   CustomizationNote,
+  InventoryItem,
+  InventoryMovement,
   MeasurementProfile,
   MediaAsset,
   Order,
@@ -1021,5 +1023,56 @@ export function toShipmentWebhookEvent(
       : { metadata: row.metadata as ShipmentWebhookEvent["metadata"] }),
     createdAt: iso(row.createdAt),
     updatedAt: iso(row.updatedAt),
+  };
+}
+
+/* ── inventory (Phase 13) ───────────────────────────────────────── */
+
+export function toInventoryItem(
+  row: Prisma.InventoryItemGetPayload<object>,
+): InventoryItem {
+  return {
+    id: row.id,
+    productId: row.productId,
+    trackingEnabled: row.trackingEnabled,
+    quantityOnHand: row.quantityOnHand,
+    quantityReserved: row.quantityReserved,
+    lowStockThreshold: row.lowStockThreshold,
+    createdAt: iso(row.createdAt),
+    updatedAt: iso(row.updatedAt),
+  };
+}
+
+export function inventoryItemColumns(item: InventoryItem) {
+  return {
+    productId: item.productId,
+    trackingEnabled: item.trackingEnabled,
+    quantityOnHand: item.quantityOnHand,
+    quantityReserved: item.quantityReserved,
+    lowStockThreshold: item.lowStockThreshold,
+    createdAt: new Date(item.createdAt),
+    updatedAt: new Date(item.updatedAt),
+  };
+}
+
+export function toInventoryMovement(
+  row: Prisma.InventoryMovementGetPayload<object>,
+): InventoryMovement {
+  return {
+    id: row.id,
+    inventoryItemId: row.inventoryItemId,
+    productId: row.productId,
+    type: row.type,
+    quantityChange: row.quantityChange,
+    quantityAfter: row.quantityAfter,
+    ...opt("actorUserId", row.actorUserId),
+    ...opt("orderId", row.orderId),
+    ...opt("orderItemId", row.orderItemId),
+    ...opt("reason", row.reason),
+    ...opt("idempotencyKey", row.idempotencyKey),
+    ...(row.metadata === null
+      ? {}
+      : { metadata: row.metadata as InventoryMovement["metadata"] }),
+    createdAt: iso(row.createdAt),
   };
 }

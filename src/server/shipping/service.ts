@@ -362,8 +362,12 @@ export function computeFulfillmentReadiness(input: {
   order: Order;
   paymentStatus: string | null;
   customizationStatuses: string[];
+  /** Phase 13: products on this order short of available tracked stock —
+   *  pre-fetched by the caller (findInventoryShortfalls) so this function
+   *  stays pure/synchronous, matching customizationStatuses' pattern. */
+  inventoryShortfalls?: Array<{ productId: string; productName: string; short: number }>;
 }): FulfillmentReadiness {
-  const { order, paymentStatus, customizationStatuses } = input;
+  const { order, paymentStatus, customizationStatuses, inventoryShortfalls = [] } = input;
   const hasStitchedItems = order.items.some((item) => item.stitching?.selected === true);
   const hasCustomization = order.items.some((item) => item.customizationRequestId !== undefined);
 
@@ -381,6 +385,9 @@ export function computeFulfillmentReadiness(input: {
     blockingReasons.push(
       `${unresolvedCustomizations.length} customization request${unresolvedCustomizations.length === 1 ? "" : "s"} on this order ${unresolvedCustomizations.length === 1 ? "is" : "are"} still open.`,
     );
+  }
+  if (inventoryShortfalls.length > 0) {
+    blockingReasons.push("Insufficient inventory for one or more items.");
   }
 
   return {

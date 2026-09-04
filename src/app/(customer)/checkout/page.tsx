@@ -335,9 +335,11 @@ export default async function CheckoutPage({
                         ? "A stitching configuration above needs attention to continue."
                         : view.readiness === "price_changed"
                           ? "Review the price changes above to continue."
-                          : view.readiness === "address_required"
-                            ? "Add a delivery address to continue."
-                            : undefined
+                          : view.readiness === "insufficient_stock"
+                            ? "Reduce the quantity of the limited-stock piece above to continue."
+                            : view.readiness === "address_required"
+                              ? "Add a delivery address to continue."
+                              : undefined
                   }
                 />
               </CardContent>

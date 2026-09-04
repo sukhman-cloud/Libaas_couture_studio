@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Boxes } from "lucide-react";
 import {
   AvailabilityBadge,
   StatusBadge,
@@ -7,6 +9,7 @@ import {
 import { ProductForm } from "@/components/admin/product-form";
 import { ProductMediaManager } from "@/components/admin/product-media-manager";
 import { Alert } from "@/components/ui/alert";
+import { buttonStyles } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Row } from "@/components/ui/layout";
 import { requireAdminSession } from "@/lib/auth/admin-guard";
@@ -60,6 +63,13 @@ export default async function EditProductPage({
           <Row gap="xs" wrap={false}>
             <StatusBadge status={product.status} />
             <AvailabilityBadge availability={product.availability} />
+            <Link
+              href={`/admin/inventory/${product.id}`}
+              className={buttonStyles({ variant: "outline", size: "sm" })}
+            >
+              <Boxes className="size-4" aria-hidden />
+              Inventory
+            </Link>
           </Row>
         }
       />

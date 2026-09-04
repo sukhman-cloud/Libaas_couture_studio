@@ -128,6 +128,8 @@ const src = {
   shipments: store.shipments ?? [],
   shipmentActivities: store.shipmentActivities ?? [],
   shipmentWebhookEvents: store.shipmentWebhookEvents ?? [],
+  inventoryItems: store.inventoryItems ?? [],
+  inventoryMovements: store.inventoryMovements ?? [],
 };
 
 const planned = {
@@ -175,6 +177,8 @@ const planned = {
   shipments: src.shipments.length,
   shipmentActivities: src.shipmentActivities.length,
   shipmentWebhookEvents: src.shipmentWebhookEvents.length,
+  inventoryItems: src.inventoryItems.length,
+  inventoryMovements: src.inventoryMovements.length,
 };
 
 // The PostgreSQL provider looks emails up lowercase and SKUs uppercase
@@ -658,6 +662,36 @@ async function importAll(tx) {
       metadata: event.metadata ?? undefined,
       createdAt: date(event.createdAt),
       updatedAt: date(event.updatedAt),
+    })),
+  });
+
+  await tx.inventoryItem.createMany({
+    data: src.inventoryItems.map((item) => ({
+      id: item.id,
+      productId: item.productId,
+      trackingEnabled: item.trackingEnabled,
+      quantityOnHand: item.quantityOnHand,
+      quantityReserved: item.quantityReserved,
+      lowStockThreshold: item.lowStockThreshold,
+      createdAt: date(item.createdAt),
+      updatedAt: date(item.updatedAt),
+    })),
+  });
+  await tx.inventoryMovement.createMany({
+    data: src.inventoryMovements.map((movement) => ({
+      id: movement.id,
+      inventoryItemId: movement.inventoryItemId,
+      productId: movement.productId,
+      type: movement.type,
+      quantityChange: movement.quantityChange,
+      quantityAfter: movement.quantityAfter,
+      actorUserId: movement.actorUserId ?? null,
+      orderId: movement.orderId ?? null,
+      orderItemId: movement.orderItemId ?? null,
+      reason: movement.reason ?? null,
+      idempotencyKey: movement.idempotencyKey ?? null,
+      metadata: movement.metadata ?? undefined,
+      createdAt: date(movement.createdAt),
     })),
   });
 

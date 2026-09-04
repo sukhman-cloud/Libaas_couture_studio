@@ -31,6 +31,7 @@ import {
   toProductCards,
 } from "@/server/catalog/public";
 import { getRepositories } from "@/server/data";
+import { customerStockLabel, getInventoryLevel } from "@/server/inventory/service";
 import type { Product, ProductAvailability } from "@/types/domain";
 
 /* ── availability presentation (text, never colour alone) ────────── */
@@ -183,6 +184,8 @@ export default async function ProductPage({
     product.salePrice.amount < product.price.amount;
   const effective = onSale ? product.salePrice! : product.price;
   const state = availability[product.availability];
+  const stockLevel = await getInventoryLevel(product.id);
+  const stockLabel = customerStockLabel(stockLevel);
 
   // Only attributes that actually carry data are rendered — never an
   // empty label.
@@ -276,6 +279,16 @@ export default async function ProductPage({
 
             <div className="mt-4">
               <Badge tone={state.tone}>{state.label}</Badge>
+              {stockLabel === "out_of_stock" && product.availability === "available" && (
+                <Badge tone="danger" className="ml-2">
+                  Out of stock
+                </Badge>
+              )}
+              {stockLabel === "limited" && (
+                <Badge tone="gold" className="ml-2">
+                  Limited availability
+                </Badge>
+              )}
               <Text tone="muted" size="sm" className="mt-1.5">
                 {state.note}
               </Text>

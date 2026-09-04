@@ -15,6 +15,7 @@ import { getRepositories } from "@/server/data";
 import { customerLockKey, withLock } from "@/server/lock";
 import { getOwnPaymentForOrder, type PaymentView } from "@/server/payments/service";
 import { getOwnShipmentForOrder, type ShipmentView } from "@/server/shipping/service";
+import { reserveInventoryForOrder } from "@/server/inventory/service";
 import type {
   Money,
   Order,
@@ -100,7 +101,8 @@ export type CreateOrderResult =
         | "invalid_quantity"
         | "configuration_invalid"
         | "address_invalid"
-        | "currency_mismatch";
+        | "currency_mismatch"
+        | "insufficient_stock";
       message: string;
     }
   | { outcome: "failed"; message: string };
@@ -458,6 +460,21 @@ export async function createOrderFromCheckout(input: {
         type: "order_created",
         createdAt: now,
       });
+
+      /* 8. reserve inventory for tracked lines — same transaction, so an
+            insufficient-stock line rolls back the ENTIRE order (no partial
+            order, no partial reservation, per the phase brief). Untracked
+            products (no row, or tracking disabled) are unaffected. */
+      const reservation = await reserveInventoryForOrder(tx, created);
+      if (!reservation.ok) {
+        throw new OrderRejection(
+          reject(
+            "insufficient_stock",
+            "A piece in your bag is no longer available in the requested quantity. Review your bag and try again.",
+          ),
+        );
+      }
+
       await tx.carts.update({ ...cart, items: [], updatedAt: now });
 
       return { outcome: "created", order: toPlacedView(created) };

@@ -9,6 +9,8 @@ import type {
   CustomerProfile,
   CustomizationRequest,
   ID,
+  InventoryItem,
+  InventoryMovement,
   MeasurementProfile,
   MediaAsset,
   Order,
@@ -305,6 +307,73 @@ export interface ShipmentWebhookEventRepository {
   markProcessed(id: ID, processedAt: string, shipmentId?: ID, orderId?: ID): Promise<ShipmentWebhookEvent | null>;
 }
 
+/**
+ * Inventory (Phase 13). One row per PRODUCT (no variants in this catalog —
+ * see the InventoryItem doc comment in domain.ts). `quantityAvailable` is
+ * never a repository input; it is always derived as
+ * `quantityOnHand - quantityReserved` by the caller/service layer.
+ *
+ * `reserve`/`release`/`adjust` are all compare-and-set deltas, mirroring
+ * `OrderRepository.transitionStatus`: the caller supplies the row it read,
+ * the repository only applies the change if the row is UNCHANGED since
+ * that read (by comparing both quantity fields), and returns null on a
+ * mismatch so the caller can re-read and retry rather than silently
+ * clobbering a concurrent write. This is the same optimistic-concurrency
+ * discipline used for order/payment/shipment status, applied to a
+ * quantity delta instead of a fixed-state transition.
+ */
+export interface InventoryRepository {
+  getById(id: ID): Promise<InventoryItem | null>;
+  getByProductId(productId: ID): Promise<InventoryItem | null>;
+  listByProductIds(productIds: ID[]): Promise<InventoryItem[]>;
+  /** Admin inventory list: search + low-stock/out-of-stock filters. */
+  query(params: InventoryQuery): Promise<Paged<InventoryItem>>;
+  create(item: InventoryItem): Promise<InventoryItem>;
+  update(item: InventoryItem): Promise<InventoryItem>;
+  /**
+   * Apply a signed delta to `quantityOnHand` (restock/adjustment/damage/
+   * correction/return/initial_stock). Refuses (returns null) if the
+   * resulting quantity would be negative, or if `expected.quantityOnHand`
+   * /`expected.quantityReserved` no longer match the stored row.
+   */
+  adjustOnHand(
+    inventoryItemId: ID,
+    delta: number,
+    expected: { quantityOnHand: number; quantityReserved: number },
+  ): Promise<InventoryItem | null>;
+  /**
+   * Move `quantity` from available into reserved (order creation) or back
+   * (cancellation/release) — `delta` is positive to reserve, negative to
+   * release. Refuses if reserving would exceed `quantityOnHand`, if
+   * releasing would take `quantityReserved` below zero, or if `expected`
+   * no longer matches the stored row.
+   */
+  adjustReserved(
+    inventoryItemId: ID,
+    delta: number,
+    expected: { quantityOnHand: number; quantityReserved: number },
+  ): Promise<InventoryItem | null>;
+}
+
+export interface InventoryQuery extends ListParams {
+  search?: string;
+  /** available <= lowStockThreshold (and > 0). */
+  lowStockOnly?: boolean;
+  /** available <= 0. */
+  outOfStockOnly?: boolean;
+  trackingEnabledOnly?: boolean;
+}
+
+export interface InventoryMovementRepository {
+  listByInventoryItemId(inventoryItemId: ID, params?: ListParams): Promise<InventoryMovement[]>;
+  listByOrderId(orderId: ID): Promise<InventoryMovement[]>;
+  /** Idempotency lookup for order-tied reservation/release movements —
+   *  the same (inventoryItemId, idempotencyKey) pair can only ever create
+   *  one row, mirroring PaymentAttemptRepository.getByIdempotencyKey. */
+  getByIdempotencyKey(inventoryItemId: ID, idempotencyKey: ID): Promise<InventoryMovement | null>;
+  create(movement: InventoryMovement): Promise<InventoryMovement>;
+}
+
 export interface AppointmentRepository {
   list(params?: ListParams): Promise<Appointment[]>;
   count(): Promise<number>;
@@ -426,6 +495,8 @@ export interface StoreRepositories {
   shipments: ShipmentRepository;
   shipmentActivities: ShipmentActivityRepository;
   shipmentWebhookEvents: ShipmentWebhookEventRepository;
+  inventoryItems: InventoryRepository;
+  inventoryMovements: InventoryMovementRepository;
 }
 
 export interface Repositories extends StoreRepositories {

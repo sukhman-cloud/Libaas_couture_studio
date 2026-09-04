@@ -7,6 +7,7 @@ import {
 } from "@/server/cart/configuration";
 import { primaryMediaOf } from "@/server/catalog/public";
 import { getRepositories } from "@/server/data";
+import { getInventoryLevel } from "@/server/inventory/service";
 import type {
   Cart,
   CartItem,
@@ -97,6 +98,14 @@ export interface CartLine {
   /** Live price differs from the snapshot this line will be charged at. */
   priceChanged: boolean;
   configuration: CartLineConfiguration;
+  /**
+   * Phase 13: the line's quantity exceeds available tracked stock right
+   * now. Only ever true for a product with inventory tracking enabled —
+   * untracked/made-to-order products never set this. Distinct from
+   * `unavailable` (which is about the availability enum): a tracked
+   * product can be `available` yet momentarily short on quantity.
+   */
+  insufficientStock: boolean;
 }
 
 export interface CartView {
@@ -113,6 +122,8 @@ export interface CartView {
   /** Purchasable lines whose stitching configuration needs attention
    *  (archived profile etc.) — they block checkout until resolved. */
   configurationIssueCount: number;
+  /** Purchasable lines whose quantity exceeds available tracked stock. */
+  insufficientStockCount: number;
 }
 
 export const EMPTY_CART_VIEW: CartView = {
@@ -123,6 +134,7 @@ export const EMPTY_CART_VIEW: CartView = {
   totalQuantity: 0,
   unavailableCount: 0,
   configurationIssueCount: 0,
+  insufficientStockCount: 0,
 };
 
 async function resolveLine(item: CartItem, userId: string): Promise<CartLine> {
@@ -130,6 +142,14 @@ async function resolveLine(item: CartItem, userId: string): Promise<CartLine> {
   const visible = product && product.status === "published" ? product : null;
   const purchasable = visible !== null && isPurchasable(visible);
   const currentPrice = visible ? effectivePriceOf(visible) : undefined;
+
+  // Inventory (Phase 13): an additional, independent gate that only ever
+  // applies to a tracked product — never overrides `purchasable` itself.
+  const level = visible ? await getInventoryLevel(visible.id) : null;
+  const insufficientStock =
+    purchasable && level !== null && level.trackingEnabled
+      ? level.quantityAvailable < item.quantity
+      : false;
 
   // Configuration health (Phase 7A): resolve the stitching selection and
   // its measurement profile — ownership re-checked on every read.
@@ -181,6 +201,7 @@ async function resolveLine(item: CartItem, userId: string): Promise<CartLine> {
         ? currentPrice.amount !== item.unitPrice.amount
         : false,
     configuration,
+    insufficientStock,
   };
 }
 
@@ -199,6 +220,7 @@ export function summariseCart(lines: CartLine[]): CartView {
     configurationIssueCount: priced.filter(
       (line) => line.configuration.issue !== undefined,
     ).length,
+    insufficientStockCount: priced.filter((line) => line.insufficientStock).length,
   };
 }
 

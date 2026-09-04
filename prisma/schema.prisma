@@ -65,6 +65,20 @@ enum ProductAvailability {
   @@map("product_availability")
 }
 
+enum InventoryMovementType {
+  initial_stock
+  restock
+  sale
+  reservation
+  reservation_release
+  adjustment
+  return
+  damaged
+  correction
+
+  @@map("inventory_movement_type")
+}
+
 enum AddressLabel {
   home
   work
@@ -184,6 +198,7 @@ model User {
   customizationNotes      CustomizationNote[]      @relation("CustomizationNoteAuthor")
   paymentActivities       PaymentActivity[]        @relation("PaymentActivityActor")
   shipmentActivities      ShipmentActivity[]       @relation("ShipmentActivityActor")
+  inventoryMovements      InventoryMovement[]      @relation("InventoryMovementActor")
 
   @@map("users")
 }
@@ -480,6 +495,7 @@ model Product {
   wishlistItems         WishlistItem[]
   orderItems            OrderItem[]
   customizationRequests CustomizationRequest[]
+  inventoryItem         InventoryItem?
 
   @@index([status])
   @@index([availability])
@@ -966,4 +982,68 @@ model ShipmentWebhookEvent {
 
   @@unique([carrier, providerEventId])
   @@map("shipment_webhook_events")
+}
+
+// ── Inventory (Phase 13 foundation) ────────────────────────────────
+
+/// One stock record per PRODUCT — this catalog has no variant concept
+/// (confirmed: no size/color splits exist), so inventory is keyed 1:1 on
+/// productId. A future variant system would add its own variantId column
+/// and re-key inventory to it, not duplicate rows per product.
+///
+/// quantityAvailable is NEVER a column here — it is always computed as
+/// quantityOnHand - quantityReserved by every reader, so it can never
+/// drift from its two inputs. A product with no row at all (the default
+/// for every product created before this phase) behaves exactly as
+/// before: purchasability is governed solely by Product.availability.
+model InventoryItem {
+  id        String  @id
+  productId String  @unique @map("product_id")
+
+  trackingEnabled  Boolean @map("tracking_enabled")
+  quantityOnHand   Int     @map("quantity_on_hand")
+  quantityReserved Int     @map("quantity_reserved")
+  lowStockThreshold Int    @map("low_stock_threshold")
+
+  createdAt DateTime @map("created_at")
+  updatedAt DateTime @map("updated_at")
+
+  product   Product             @relation(fields: [productId], references: [id], onDelete: Restrict)
+  movements InventoryMovement[]
+
+  // Non-negativity and quantityReserved <= quantityOnHand are enforced by
+  // hand-appended CHECK constraints in the migration SQL (Prisma 6.19's
+  // schema language has no @@check attribute) — see the migration file.
+  @@map("inventory_items")
+}
+
+/// Append-only stock ledger — mirrors OrderActivity/PaymentActivity/
+/// ShipmentActivity: one immutable row per stock-affecting event, never
+/// updated or deleted. quantityChange is signed; quantityAfter is the
+/// resulting quantityOnHand snapshot at write time.
+model InventoryMovement {
+  id              String                @id
+  inventoryItemId String                @map("inventory_item_id")
+  productId       String                @map("product_id")
+  type            InventoryMovementType
+  quantityChange  Int                   @map("quantity_change")
+  quantityAfter   Int                   @map("quantity_after")
+  actorUserId     String?               @map("actor_user_id")
+  orderId         String?               @map("order_id")
+  orderItemId     String?               @map("order_item_id")
+  reason          String?
+  /// Idempotency key for order-tied reservation/release movements — see
+  /// the domain type doc comment. Absent for admin-initiated movements.
+  idempotencyKey  String?               @map("idempotency_key")
+  metadata        Json?
+
+  createdAt DateTime @map("created_at")
+
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  actor         User?         @relation("InventoryMovementActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@unique([inventoryItemId, idempotencyKey])
+  @@index([inventoryItemId, createdAt])
+  @@index([orderId])
+  @@map("inventory_movements")
 }

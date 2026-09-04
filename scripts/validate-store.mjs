@@ -73,6 +73,8 @@ const COLLECTIONS = [
   "shipments",
   "shipmentActivities",
   "shipmentWebhookEvents",
+  "inventoryItems",
+  "inventoryMovements",
 ];
 
 for (const key of COLLECTIONS) {
@@ -815,6 +817,85 @@ for (const event of shipmentWebhookEvents) {
   }
   if (event.orderId && !orderIds.has(event.orderId)) {
     problem("orphan", `ShipmentWebhookEvent ${event.id} references missing order ${event.orderId}.`);
+  }
+}
+
+/* ── inventory & stock management (Phase 13 foundation) ─────────── */
+
+const INVENTORY_MOVEMENT_TYPES = new Set([
+  "initial_stock", "restock", "sale", "reservation", "reservation_release",
+  "adjustment", "return", "damaged", "correction",
+]);
+
+const inventoryItems = rows("inventoryItems");
+checkIds(inventoryItems, "inventoryItems");
+checkTimestamps(inventoryItems, "inventoryItem");
+checkDuplicates(inventoryItems, "inventoryItems", (i) => i.productId, "productId");
+for (const item of inventoryItems) {
+  if (!productIds.has(item.productId)) {
+    problem("orphan", `InventoryItem ${item.id} references missing product ${item.productId}.`);
+  }
+  if (typeof item.trackingEnabled !== "boolean") {
+    problem("shape", `InventoryItem ${item.id}: trackingEnabled is not a boolean.`);
+  }
+  if (!Number.isInteger(item.quantityOnHand) || item.quantityOnHand < 0) {
+    problem("shape", `InventoryItem ${item.id}: quantityOnHand must be a non-negative integer.`);
+  }
+  if (!Number.isInteger(item.quantityReserved) || item.quantityReserved < 0) {
+    problem("shape", `InventoryItem ${item.id}: quantityReserved must be a non-negative integer.`);
+  }
+  if (
+    Number.isInteger(item.quantityOnHand) &&
+    Number.isInteger(item.quantityReserved) &&
+    item.quantityReserved > item.quantityOnHand
+  ) {
+    problem(
+      "money",
+      `InventoryItem ${item.id}: quantityReserved (${item.quantityReserved}) exceeds quantityOnHand (${item.quantityOnHand}).`,
+    );
+  }
+  if (!Number.isInteger(item.lowStockThreshold) || item.lowStockThreshold < 0) {
+    problem("shape", `InventoryItem ${item.id}: lowStockThreshold must be a non-negative integer.`);
+  }
+}
+
+const inventoryItemIds = new Set(inventoryItems.map((i) => i.id));
+const inventoryMovements = rows("inventoryMovements");
+checkIds(inventoryMovements, "inventoryMovements");
+checkTimestamps(inventoryMovements, "inventoryMovement", { requireUpdated: false });
+checkDuplicates(
+  inventoryMovements.filter((m) => m.idempotencyKey),
+  "inventoryMovements",
+  (m) => `${m.inventoryItemId}::${m.idempotencyKey}`,
+  "inventoryItemId + idempotencyKey",
+);
+for (const movement of inventoryMovements) {
+  if (!inventoryItemIds.has(movement.inventoryItemId)) {
+    problem("orphan", `InventoryMovement ${movement.id} references missing inventory item ${movement.inventoryItemId}.`);
+  }
+  if (!productIds.has(movement.productId)) {
+    problem("orphan", `InventoryMovement ${movement.id} references missing product ${movement.productId}.`);
+  }
+  if (!INVENTORY_MOVEMENT_TYPES.has(movement.type)) {
+    problem("shape", `InventoryMovement ${movement.id}: unknown type "${movement.type}".`);
+  }
+  if (!Number.isInteger(movement.quantityChange) || movement.quantityChange === 0) {
+    problem("shape", `InventoryMovement ${movement.id}: quantityChange must be a non-zero integer.`);
+  }
+  if (!Number.isInteger(movement.quantityAfter) || movement.quantityAfter < 0) {
+    problem("shape", `InventoryMovement ${movement.id}: quantityAfter must be a non-negative integer.`);
+  }
+  if (movement.actorUserId && !userIds.has(movement.actorUserId)) {
+    problem("orphan", `InventoryMovement ${movement.id} references missing actor ${movement.actorUserId}.`);
+  }
+  if (movement.orderId && !orderIds.has(movement.orderId)) {
+    problem("orphan", `InventoryMovement ${movement.id} references missing order ${movement.orderId}.`);
+  }
+  if (
+    movement.reason !== undefined &&
+    (typeof movement.reason !== "string" || movement.reason.length > 500)
+  ) {
+    problem("shape", `InventoryMovement ${movement.id}: reason is invalid or over 500 chars.`);
   }
 }
 

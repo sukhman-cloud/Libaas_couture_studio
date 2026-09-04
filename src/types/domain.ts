@@ -265,14 +265,79 @@ export interface Product extends Timestamps {
   archivedAt?: ISODateTime;
 }
 
+/**
+ * Stock record for one sellable product (Phase 13). There are no product
+ * variants in this catalog (confirmed: no size/color splits), so inventory
+ * is keyed 1:1 on `productId` — a future variant system would add its own
+ * `variantId` column and move this key, not duplicate rows per variant.
+ *
+ * `quantityAvailable` is NEVER stored or settable directly — it is always
+ * `quantityOnHand - quantityReserved`, computed by the repository layer at
+ * the moment of every read/write so it can never drift from its inputs.
+ *
+ * `trackingEnabled: false` (the default when no row exists at all) means
+ * this product's purchasability is governed ONLY by the existing
+ * `ProductAvailability` enum, exactly as before Phase 13 — this is what
+ * keeps every pre-Phase-13 product working unchanged, and is also the
+ * correct state for a `made_to_order` piece that is crafted per order and
+ * has no meaningful "stock count".
+ */
 export interface InventoryItem extends Timestamps {
   id: ID;
   productId: ID;
-  /** Set once variants exist; absent means the product itself is stocked. */
-  variantId?: ID;
+  trackingEnabled: boolean;
   quantityOnHand: number;
+  quantityReserved: number;
   lowStockThreshold: number;
-  location?: string;
+}
+
+/** Derived, read-only view of stock — never persisted independently. */
+export interface InventoryLevel {
+  quantityOnHand: number;
+  quantityReserved: number;
+  quantityAvailable: number;
+  lowStockThreshold: number;
+  trackingEnabled: boolean;
+}
+
+export type InventoryMovementType =
+  | "initial_stock"
+  | "restock"
+  | "sale"
+  | "reservation"
+  | "reservation_release"
+  | "adjustment"
+  | "return"
+  | "damaged"
+  | "correction";
+
+/**
+ * Append-only stock ledger — mirrors OrderActivity/PaymentActivity/
+ * ShipmentActivity exactly: one immutable row per stock-affecting event,
+ * never updated or deleted. `quantityChange` is signed (+restock, -sale);
+ * `quantityAfter` is the resulting `quantityOnHand` snapshot at write time,
+ * so history reads without recomputing a running total.
+ */
+export interface InventoryMovement {
+  id: ID;
+  inventoryItemId: ID;
+  productId: ID;
+  type: InventoryMovementType;
+  /** Signed delta applied to quantityOnHand (or quantityReserved for
+   *  reservation/reservation_release — see the movement's `metadata`). */
+  quantityChange: number;
+  quantityAfter: number;
+  actorUserId?: ID;
+  orderId?: ID;
+  orderItemId?: ID;
+  reason?: string;
+  /** Idempotency key for reservation/release movements tied to an order,
+   *  so a retried checkout or a repeated cancellation can never apply the
+   *  same stock change twice. Absent for admin-initiated movements, which
+   *  are idempotent by their own form-submission discipline instead. */
+  idempotencyKey?: ID;
+  metadata?: Record<string, string | number | boolean | null>;
+  createdAt: ISODateTime;
 }
 
 // ── Measurements & customization ────────────────────────────────────
@@ -477,7 +542,9 @@ export type OrderActivityType =
   | "shipment_returned"
   | "shipment_cancelled"
   | "shipment_tracking_updated"
-  | "shipment_webhook_processed";
+  | "shipment_webhook_processed"
+  | "inventory_reserved"
+  | "inventory_released";
 
 export interface OrderActivity {
   id: ID;

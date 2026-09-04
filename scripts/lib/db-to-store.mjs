@@ -1,5 +1,5 @@
 /**
- * Reconstruct a current-version (v9) JSON store object from a PostgreSQL database.
+ * Reconstruct a current-version (v10) JSON store object from a PostgreSQL database.
  *
  * Used by scripts/verify-migration.mjs (to compare the database against the
  * JSON source, entity by entity) and scripts/export-postgres-store.mjs (the
@@ -61,6 +61,8 @@ export async function reconstructStore(prisma) {
     shipments,
     shipmentActivities,
     shipmentWebhookEvents,
+    inventoryItems,
+    inventoryMovements,
   ] = await Promise.all([
     prisma.user.findMany(byCreatedThenId),
     prisma.authCredential.findMany(byCreatedThenId),
@@ -108,10 +110,12 @@ export async function reconstructStore(prisma) {
     prisma.shipment.findMany(byCreatedThenId),
     prisma.shipmentActivity.findMany(byCreatedThenId),
     prisma.shipmentWebhookEvent.findMany(byCreatedThenId),
+    prisma.inventoryItem.findMany(byCreatedThenId),
+    prisma.inventoryMovement.findMany(byCreatedThenId),
   ]);
 
   return {
-    version: 9,
+    version: 10,
     products: products.map((row) => {
       const attributes = {};
       opt(attributes, "fabric", row.fabric);
@@ -424,6 +428,39 @@ export async function reconstructStore(prisma) {
       return event;
     }),
 
+    inventoryItems: inventoryItems.map((row) => {
+      const item = {
+        id: row.id,
+        productId: row.productId,
+        trackingEnabled: row.trackingEnabled,
+        quantityOnHand: row.quantityOnHand,
+        quantityReserved: row.quantityReserved,
+        lowStockThreshold: row.lowStockThreshold,
+      };
+      item.createdAt = iso(row.createdAt);
+      item.updatedAt = iso(row.updatedAt);
+      return item;
+    }),
+
+    inventoryMovements: inventoryMovements.map((row) => {
+      const movement = {
+        id: row.id,
+        inventoryItemId: row.inventoryItemId,
+        productId: row.productId,
+        type: row.type,
+        quantityChange: row.quantityChange,
+        quantityAfter: row.quantityAfter,
+      };
+      opt(movement, "actorUserId", row.actorUserId);
+      opt(movement, "orderId", row.orderId);
+      opt(movement, "orderItemId", row.orderItemId);
+      opt(movement, "reason", row.reason);
+      opt(movement, "idempotencyKey", row.idempotencyKey);
+      opt(movement, "metadata", row.metadata);
+      movement.createdAt = iso(row.createdAt);
+      return movement;
+    }),
+
     users: users.map((row) => {
       const user = { id: row.id, kind: row.kind, name: row.name };
       opt(user, "email", row.email);
@@ -568,6 +605,8 @@ export async function countAll(prisma) {
     shipments,
     shipmentActivities,
     shipmentWebhookEvents,
+    inventoryItems,
+    inventoryMovements,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.authCredential.count(),
@@ -601,6 +640,8 @@ export async function countAll(prisma) {
     prisma.shipment.count(),
     prisma.shipmentActivity.count(),
     prisma.shipmentWebhookEvent.count(),
+    prisma.inventoryItem.count(),
+    prisma.inventoryMovement.count(),
   ]);
   return {
     users,
@@ -635,5 +676,7 @@ export async function countAll(prisma) {
     shipments,
     shipmentActivities,
     shipmentWebhookEvents,
+    inventoryItems,
+    inventoryMovements,
   };
 }

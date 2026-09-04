@@ -11,6 +11,8 @@ import type {
   CustomizationActivity,
   CustomizationNote,
   ID,
+  InventoryItem,
+  InventoryMovement,
   MeasurementProfile,
   MediaAsset,
   Order,
@@ -54,7 +56,7 @@ import { withLock } from "@/server/lock";
  */
 
 /** Bump when the persisted shape changes; add a step to `migrateStore`. */
-export const STORE_VERSION = 9;
+export const STORE_VERSION = 10;
 
 export interface DataStore {
   version: number;
@@ -83,6 +85,8 @@ export interface DataStore {
   shipments: Shipment[];
   shipmentActivities: ShipmentActivity[];
   shipmentWebhookEvents: ShipmentWebhookEvent[];
+  inventoryItems: InventoryItem[];
+  inventoryMovements: InventoryMovement[];
 }
 
 export function emptyStore(): DataStore {
@@ -113,6 +117,8 @@ export function emptyStore(): DataStore {
     shipments: [],
     shipmentActivities: [],
     shipmentWebhookEvents: [],
+    inventoryItems: [],
+    inventoryMovements: [],
   };
 }
 
@@ -151,6 +157,8 @@ const STORE_COLLECTION_KEYS = [
   "shipments",
   "shipmentActivities",
   "shipmentWebhookEvents",
+  "inventoryItems",
+  "inventoryMovements",
 ] as const;
 
 export function migrateStore(raw: unknown): DataStore | null {
@@ -262,6 +270,11 @@ export function migrateStore(raw: unknown): DataStore | null {
   // (Phase 11 foundation). Nothing to convert — emptyStore() supplies all
   // three collections and every existing order remains a valid historical
   // record with no shipment attached (read paths treat that honestly).
+  // v9 → v10: inventory items + inventory movements (Phase 13 foundation).
+  // Nothing to convert — emptyStore() supplies both empty collections, and
+  // every existing product simply has NO inventory row, which reads as
+  // trackingEnabled: false (availability governed by the existing
+  // ProductAvailability enum alone, unchanged from before this phase).
 
   store.version = STORE_VERSION;
   return store;
@@ -786,6 +799,136 @@ function buildStoreRepositories(
           if (shipmentId) event.shipmentId = shipmentId;
           if (orderId) event.orderId = orderId;
           return event;
+        });
+      },
+    },
+
+    inventoryItems: {
+      async getById(id) {
+        return store.inventoryItems.find((item) => item.id === id) ?? null;
+      },
+      async getByProductId(productId) {
+        return store.inventoryItems.find((item) => item.productId === productId) ?? null;
+      },
+      async listByProductIds(productIds) {
+        const wanted = new Set(productIds);
+        return store.inventoryItems.filter((item) => wanted.has(item.productId));
+      },
+      async query(params = {}) {
+        const search = params.search?.trim().toLowerCase();
+        const productsById = new Map(store.products.map((p) => [p.id, p]));
+        let rows = store.inventoryItems.filter((item) => {
+          const product = productsById.get(item.productId);
+          if (!product) return false;
+          if (params.trackingEnabledOnly && !item.trackingEnabled) return false;
+          if (search) {
+            const haystack = `${product.name} ${product.sku}`.toLowerCase();
+            if (!haystack.includes(search)) return false;
+          }
+          const available = item.quantityOnHand - item.quantityReserved;
+          if (params.outOfStockOnly && !(item.trackingEnabled && available <= 0)) return false;
+          if (
+            params.lowStockOnly &&
+            !(item.trackingEnabled && available > 0 && available <= item.lowStockThreshold)
+          ) {
+            return false;
+          }
+          return true;
+        });
+        rows = rows.sort((a, b) => a.updatedAt < b.updatedAt ? 1 : -1);
+        return page(rows, params);
+      },
+      async create(item) {
+        return guard(async () => {
+          if (store.inventoryItems.some((row) => row.productId === item.productId)) {
+            throw new Error(`Inventory item already exists for product: ${item.productId}`);
+          }
+          store.inventoryItems.push(item);
+          await persistOrRollback(() => {
+            const index = store.inventoryItems.lastIndexOf(item);
+            if (index !== -1) store.inventoryItems.splice(index, 1);
+          });
+          return item;
+        });
+      },
+      async update(item) {
+        return replace(store.inventoryItems, item, "Inventory item");
+      },
+      async adjustOnHand(inventoryItemId, delta, expected) {
+        return guard(async () => {
+          const item = store.inventoryItems.find((row) => row.id === inventoryItemId);
+          if (!item) return null;
+          if (
+            item.quantityOnHand !== expected.quantityOnHand ||
+            item.quantityReserved !== expected.quantityReserved
+          ) {
+            return null;
+          }
+          const nextOnHand = item.quantityOnHand + delta;
+          if (nextOnHand < 0 || nextOnHand < item.quantityReserved) return null;
+          item.quantityOnHand = nextOnHand;
+          item.updatedAt = new Date().toISOString();
+          return item;
+        });
+      },
+      async adjustReserved(inventoryItemId, delta, expected) {
+        return guard(async () => {
+          const item = store.inventoryItems.find((row) => row.id === inventoryItemId);
+          if (!item) return null;
+          if (
+            item.quantityOnHand !== expected.quantityOnHand ||
+            item.quantityReserved !== expected.quantityReserved
+          ) {
+            return null;
+          }
+          const nextReserved = item.quantityReserved + delta;
+          if (nextReserved < 0 || nextReserved > item.quantityOnHand) return null;
+          item.quantityReserved = nextReserved;
+          item.updatedAt = new Date().toISOString();
+          return item;
+        });
+      },
+    },
+
+    inventoryMovements: {
+      async listByInventoryItemId(inventoryItemId, params) {
+        const rows = store.inventoryMovements
+          .filter((movement) => movement.inventoryItemId === inventoryItemId)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+        return paginate(rows, params);
+      },
+      async listByOrderId(orderId) {
+        return store.inventoryMovements
+          .filter((movement) => movement.orderId === orderId)
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+      },
+      async getByIdempotencyKey(inventoryItemId, idempotencyKey) {
+        return (
+          store.inventoryMovements.find(
+            (movement) =>
+              movement.inventoryItemId === inventoryItemId &&
+              movement.idempotencyKey === idempotencyKey,
+          ) ?? null
+        );
+      },
+      async create(movement) {
+        return guard(async () => {
+          if (
+            movement.idempotencyKey &&
+            store.inventoryMovements.some(
+              (row) =>
+                row.inventoryItemId === movement.inventoryItemId &&
+                row.idempotencyKey === movement.idempotencyKey,
+            )
+          ) {
+            throw new Error("Duplicate inventory movement idempotency key.");
+          }
+          store.inventoryMovements.push(movement);
+          await persistOrRollback(() => {
+            const index = store.inventoryMovements.lastIndexOf(movement);
+            if (index !== -1) store.inventoryMovements.splice(index, 1);
+          });
+          return movement;
         });
       },
     },

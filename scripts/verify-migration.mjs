@@ -133,6 +133,8 @@ const plannedCounts = {
   shipments: source.shipments?.length ?? 0,
   shipmentActivities: source.shipmentActivities?.length ?? 0,
   shipmentWebhookEvents: source.shipmentWebhookEvents?.length ?? 0,
+  inventoryItems: source.inventoryItems?.length ?? 0,
+  inventoryMovements: source.inventoryMovements?.length ?? 0,
 };
 for (const [table, expected] of Object.entries(plannedCounts)) {
   if (dbCounts[table] === expected) {
@@ -169,6 +171,8 @@ const ENTITY_COLLECTIONS = [
   "shipments",
   "shipmentActivities",
   "shipmentWebhookEvents",
+  "inventoryItems",
+  "inventoryMovements",
 ];
 
 for (const collection of ENTITY_COLLECTIONS) {

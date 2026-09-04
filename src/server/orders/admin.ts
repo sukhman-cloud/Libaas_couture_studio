@@ -38,6 +38,7 @@ import {
 } from "@/server/shipping/service";
 import { SHIPMENT_STATUSES } from "@/server/shipping/workflow";
 import type { ShipmentMethod, ShipmentStatus } from "@/types/domain";
+import { findInventoryShortfalls, releaseInventoryForOrder } from "@/server/inventory/service";
 
 /**
  * Admin order reading (Phase 7C) — the studio's fulfillment view.
@@ -145,6 +146,9 @@ export interface AdminOrderDetail {
    *  or fulfillment hasn't started) — never fabricated. */
   shipment: AdminShipmentView | null;
   fulfillmentReadiness: FulfillmentReadiness;
+  /** Products on this order short of available tracked stock — empty
+   *  when nothing is short (including every untracked product). */
+  inventoryShortfalls: Array<{ productId: string; productName: string; short: number }>;
   customizationRequests: Array<{
     id: string;
     status: string;
@@ -285,10 +289,12 @@ export async function getAdminOrderByNumber(
   const customizationRequests = (await getRepositories().customizationRequests.list()).filter(
     (request) => request.orderId === order.id,
   );
+  const inventoryShortfalls = await findInventoryShortfalls(order);
   const fulfillmentReadiness = computeFulfillmentReadiness({
     order,
     paymentStatus: payment?.status ?? null,
     customizationStatuses: customizationRequests.map((request) => request.status),
+    inventoryShortfalls,
   });
 
   return {
@@ -315,6 +321,7 @@ export async function getAdminOrderByNumber(
     payment,
     shipment,
     fulfillmentReadiness,
+    inventoryShortfalls,
     customizationRequests: customizationRequests.map((request) => ({
       id: request.id,
       status: request.status,
@@ -364,6 +371,18 @@ export async function transitionAdminOrder(
         toStatus: nextStatus as OrderStatus,
         createdAt: now,
       });
+
+      // Inventory (Phase 13): release this order's reservation in the SAME
+      // transaction as the status change, so a cancellation can never
+      // commit without its stock coming back (or vice versa). Idempotent —
+      // see releaseInventoryForOrder's doc comment.
+      if (nextStatus === "cancelled") {
+        await releaseInventoryForOrder(
+          tx,
+          updated,
+          auth.session.sub === "dev-admin" ? undefined : auth.session.sub,
+        );
+      }
     });
     return { ok: true, status: nextStatus as OrderStatus };
   } catch (error) {

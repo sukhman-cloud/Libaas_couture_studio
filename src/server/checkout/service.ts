@@ -70,6 +70,7 @@ export interface CheckoutItem {
   lineTotal: Money;
   unavailable: boolean;
   priceChanged: boolean;
+  insufficientStock: boolean;
   /** Live price, shown when it differs from the snapshot. */
   currentPrice?: Money;
   /**
@@ -88,6 +89,7 @@ export interface CheckoutIssue {
     | "item_unavailable"
     | "price_changed"
     | "configuration_invalid"
+    | "insufficient_stock"
     | "address_required"
     | "address_invalid";
   message: string;
@@ -100,6 +102,7 @@ export type CheckoutReadiness =
   | "cart_invalid"
   | "configuration_invalid"
   | "price_changed"
+  | "insufficient_stock"
   | "address_required"
   | "ready";
 
@@ -223,6 +226,7 @@ function toCheckoutItem(line: CartLine): CheckoutItem {
     priceChanged: line.priceChanged,
     currentPrice: line.priceChanged ? line.product?.currentPrice : undefined,
     configuration: line.configuration,
+    insufficientStock: line.insufficientStock,
   };
 }
 
@@ -294,6 +298,12 @@ export async function getCheckoutView(
         itemId: item.itemId,
         message: `The price of ${item.name ?? "a piece in your bag"} has changed. Review it to continue.`,
       });
+    } else if (item.insufficientStock) {
+      issues.push({
+        code: "insufficient_stock",
+        itemId: item.itemId,
+        message: `Only limited stock remains of ${item.name ?? "a piece in your bag"}. Reduce the quantity to continue.`,
+      });
     }
   }
 
@@ -309,6 +319,8 @@ export async function getCheckoutView(
     readiness = "configuration_invalid";
   } else if (items.some((item) => item.priceChanged)) {
     readiness = "price_changed";
+  } else if (items.some((item) => item.insufficientStock)) {
+    readiness = "insufficient_stock";
   } else if (!selectedAddress) {
     readiness = "address_required";
     issues.push({

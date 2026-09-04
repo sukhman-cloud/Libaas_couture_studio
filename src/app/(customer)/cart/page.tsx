@@ -103,6 +103,13 @@ export default async function CartPage() {
                     : `${cart.configurationIssueCount} stitching configurations in your bag need attention before checkout.`}
                 </Alert>
               )}
+              {cart.insufficientStockCount > 0 && (
+                <Alert tone="warning" className="mb-5">
+                  {cart.insufficientStockCount === 1
+                    ? "One piece in your bag has limited stock — reduce the quantity to continue."
+                    : `${cart.insufficientStockCount} pieces in your bag have limited stock — reduce the quantity to continue.`}
+                </Alert>
+              )}
 
               <ul className="space-y-4">
                 {cart.lines.map((line) => {
@@ -165,6 +172,9 @@ export default async function CartPage() {
                               <Badge tone="danger">
                                 No longer available
                               </Badge>
+                            )}
+                            {!line.unavailable && line.insufficientStock && (
+                              <Badge tone="gold">Limited stock available</Badge>
                             )}
 
                             <CartLineConfigurationControl

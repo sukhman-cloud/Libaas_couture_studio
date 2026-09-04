@@ -52,6 +52,8 @@ const ORDER_ACTIVITY_LABELS: Record<string, string> = {
   shipment_cancelled: "Shipment cancelled",
   shipment_tracking_updated: "Tracking updated",
   shipment_webhook_processed: "Shipment webhook processed",
+  inventory_reserved: "Inventory reserved",
+  inventory_released: "Inventory released",
 };
 
 function orderActivityLabel(activity: { type: string; toStatus?: string }): string {
@@ -106,6 +108,15 @@ export default async function AdminOrderDetailPage({
           <Alert tone="warning">
             <span className="font-medium">Not ready for fulfillment.</span>{" "}
             {order.fulfillmentReadiness.blockingReasons.join(" ")}
+            {order.inventoryShortfalls.length > 0 && (
+              <ul className="mt-2 list-inside list-disc">
+                {order.inventoryShortfalls.map((shortfall) => (
+                  <li key={shortfall.productId}>
+                    {shortfall.productName} — short by {shortfall.short}
+                  </li>
+                ))}
+              </ul>
+            )}
           </Alert>
         )}
         <div className="grid gap-5 lg:grid-cols-2">

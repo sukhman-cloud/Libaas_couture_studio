@@ -71,6 +71,9 @@ import {
   toShipmentActivity,
   toShipmentWebhookEvent,
   shipmentColumns,
+  toInventoryItem,
+  toInventoryMovement,
+  inventoryItemColumns,
 } from "@/server/data/postgres/mappers";
 import type { CatalogStatus } from "@/types/domain";
 
@@ -822,6 +825,153 @@ function buildPostgresRepositories(db: Db): StoreRepositories {
         if (result.count === 0) return null;
         const row = await db.shipmentWebhookEvent.findUniqueOrThrow({ where: { id } });
         return toShipmentWebhookEvent(row);
+      },
+    },
+
+    inventoryItems: {
+      async getById(id) {
+        const row = await db.inventoryItem.findUnique({ where: { id } });
+        return row ? toInventoryItem(row) : null;
+      },
+      async getByProductId(productId) {
+        const row = await db.inventoryItem.findUnique({ where: { productId } });
+        return row ? toInventoryItem(row) : null;
+      },
+      async listByProductIds(productIds) {
+        const rows = await db.inventoryItem.findMany({
+          where: { productId: { in: productIds } },
+        });
+        return rows.map(toInventoryItem);
+      },
+      async query(params = {}) {
+        // Same trade-off as the catalog: load rows and filter/paginate with
+        // the shared JS predicate so behaviour is identical to the JSON
+        // provider; revisit with real volume (see catalog-logic notes).
+        const rows = await db.inventoryItem.findMany({
+          ...(params.trackingEnabledOnly ? { where: { trackingEnabled: true } } : {}),
+          include: { product: true },
+          orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        });
+        const search = params.search?.trim().toLowerCase();
+        let matched = rows.map((row) => ({ item: toInventoryItem(row), product: row.product }));
+        if (search) {
+          matched = matched.filter(({ product }) =>
+            `${product.name} ${product.sku}`.toLowerCase().includes(search),
+          );
+        }
+        matched = matched.filter(({ item }) => {
+          const available = item.quantityOnHand - item.quantityReserved;
+          if (params.outOfStockOnly && !(item.trackingEnabled && available <= 0)) return false;
+          if (
+            params.lowStockOnly &&
+            !(item.trackingEnabled && available > 0 && available <= item.lowStockThreshold)
+          ) {
+            return false;
+          }
+          return true;
+        });
+        const items = matched.map(({ item }) => item);
+        return page(items, params);
+      },
+      async create(item) {
+        // productId uniqueness (one inventory row per product) is enforced
+        // by the database constraint; a violation surfaces as P2002.
+        const row = await db.inventoryItem.create({
+          data: { id: item.id, ...inventoryItemColumns(item) },
+        });
+        return toInventoryItem(row);
+      },
+      async update(item) {
+        return toInventoryItem(
+          await orNotFound(
+            db.inventoryItem.update({
+              where: { id: item.id },
+              data: inventoryItemColumns(item),
+            }),
+            "Inventory item",
+            item.id,
+          ),
+        );
+      },
+      async adjustOnHand(inventoryItemId, delta, expected) {
+        // CAS at the SQL level: the WHERE clause re-checks BOTH quantity
+        // columns match what the caller read, so a concurrent writer's
+        // change is never silently overwritten — this row simply doesn't
+        // match and the update touches zero rows. The DB's own CHECK
+        // constraints (non-negative, reserved <= on_hand) are the second,
+        // even-stronger backstop against a negative or inconsistent write.
+        const result = await db.$executeRaw`
+          UPDATE "inventory_items"
+          SET "quantity_on_hand" = "quantity_on_hand" + ${delta}, "updated_at" = ${new Date()}
+          WHERE "id" = ${inventoryItemId}
+            AND "quantity_on_hand" = ${expected.quantityOnHand}
+            AND "quantity_reserved" = ${expected.quantityReserved}
+        `;
+        if (result === 0) return null;
+        const row = await db.inventoryItem.findUniqueOrThrow({ where: { id: inventoryItemId } });
+        return toInventoryItem(row);
+      },
+      async adjustReserved(inventoryItemId, delta, expected) {
+        const result = await db.$executeRaw`
+          UPDATE "inventory_items"
+          SET "quantity_reserved" = "quantity_reserved" + ${delta}, "updated_at" = ${new Date()}
+          WHERE "id" = ${inventoryItemId}
+            AND "quantity_on_hand" = ${expected.quantityOnHand}
+            AND "quantity_reserved" = ${expected.quantityReserved}
+        `;
+        if (result === 0) return null;
+        const row = await db.inventoryItem.findUniqueOrThrow({ where: { id: inventoryItemId } });
+        return toInventoryItem(row);
+      },
+    },
+
+    inventoryMovements: {
+      async listByInventoryItemId(inventoryItemId, params) {
+        const rows = await db.inventoryMovement.findMany({
+          where: { inventoryItemId },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          ...(params?.limit !== undefined || params?.offset !== undefined
+            ? { skip: params.offset ?? 0, take: params.limit ?? 50 }
+            : {}),
+        });
+        return rows.map(toInventoryMovement);
+      },
+      async listByOrderId(orderId) {
+        const rows = await db.inventoryMovement.findMany({
+          where: { orderId },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        });
+        return rows.map(toInventoryMovement);
+      },
+      async getByIdempotencyKey(inventoryItemId, idempotencyKey) {
+        const row = await db.inventoryMovement.findUnique({
+          where: { inventoryItemId_idempotencyKey: { inventoryItemId, idempotencyKey } },
+        });
+        return row ? toInventoryMovement(row) : null;
+      },
+      async create(movement) {
+        // (inventoryItemId, idempotencyKey) uniqueness is enforced by the
+        // database constraint when idempotencyKey is present; a violation
+        // surfaces as P2002. NULL idempotencyKey values never collide
+        // (standard Postgres unique-index NULL semantics).
+        const row = await db.inventoryMovement.create({
+          data: {
+            id: movement.id,
+            inventoryItemId: movement.inventoryItemId,
+            productId: movement.productId,
+            type: movement.type,
+            quantityChange: movement.quantityChange,
+            quantityAfter: movement.quantityAfter,
+            actorUserId: movement.actorUserId ?? null,
+            orderId: movement.orderId ?? null,
+            orderItemId: movement.orderItemId ?? null,
+            reason: movement.reason ?? null,
+            idempotencyKey: movement.idempotencyKey ?? null,
+            metadata: movement.metadata ?? Prisma.DbNull,
+            createdAt: new Date(movement.createdAt),
+          },
+        });
+        return toInventoryMovement(row);
       },
     },
 

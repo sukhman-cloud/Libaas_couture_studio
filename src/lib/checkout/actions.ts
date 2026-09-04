@@ -175,7 +175,8 @@ export async function confirmCheckout(
       result.outcome === "rejected" &&
       (result.reason === "price_changed" ||
         result.reason === "item_unavailable" ||
-        result.reason === "configuration_invalid")
+        result.reason === "configuration_invalid" ||
+        result.reason === "insufficient_stock")
     ) {
       const view = await getCheckoutView(user, addressId);
       const specific = view.issues[0]?.message;
