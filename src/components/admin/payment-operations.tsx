@@ -44,8 +44,10 @@ export function PaymentOperations({
           {pending ? "Saving..." : "Mark as paid"}
         </button>
       </form>
-      {state.message && <p className="mt-3 text-sm text-success">{state.message}</p>}
-      {!state.ok && <p className="mt-3 text-sm text-danger">{state.error}</p>}
+      <div role="status" aria-live="polite">
+        {state.message && <p className="mt-3 text-sm text-success">{state.message}</p>}
+        {!state.ok && <p className="mt-3 text-sm text-danger">{state.error}</p>}
+      </div>
     </section>
   );
 }

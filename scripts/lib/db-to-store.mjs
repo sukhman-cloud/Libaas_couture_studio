@@ -1,5 +1,5 @@
 /**
- * Reconstruct a current-version (v5) JSON store object from a PostgreSQL database.
+ * Reconstruct a current-version (v9) JSON store object from a PostgreSQL database.
  *
  * Used by scripts/verify-migration.mjs (to compare the database against the
  * JSON source, entity by entity) and scripts/export-postgres-store.mjs (the
@@ -54,6 +54,13 @@ export async function reconstructStore(prisma) {
     orderNotes,
     customizationActivities,
     customizationNotes,
+    payments,
+    paymentAttempts,
+    paymentActivities,
+    paymentWebhookEvents,
+    shipments,
+    shipmentActivities,
+    shipmentWebhookEvents,
   ] = await Promise.all([
     prisma.user.findMany(byCreatedThenId),
     prisma.authCredential.findMany(byCreatedThenId),
@@ -94,10 +101,17 @@ export async function reconstructStore(prisma) {
     prisma.orderNote.findMany(byCreatedThenId),
     prisma.customizationActivity.findMany(byCreatedThenId),
     prisma.customizationNote.findMany(byCreatedThenId),
+    prisma.payment.findMany(byCreatedThenId),
+    prisma.paymentAttempt.findMany(byCreatedThenId),
+    prisma.paymentActivity.findMany(byCreatedThenId),
+    prisma.paymentWebhookEvent.findMany(byCreatedThenId),
+    prisma.shipment.findMany(byCreatedThenId),
+    prisma.shipmentActivity.findMany(byCreatedThenId),
+    prisma.shipmentWebhookEvent.findMany(byCreatedThenId),
   ]);
 
   return {
-    version: 7,
+    version: 9,
     products: products.map((row) => {
       const attributes = {};
       opt(attributes, "fabric", row.fabric);
@@ -290,6 +304,126 @@ export async function reconstructStore(prisma) {
       createdAt: iso(row.createdAt),
     })),
 
+    payments: payments.map((row) => {
+      const payment = {
+        id: row.id,
+        orderId: row.orderId,
+        provider: row.provider,
+      };
+      opt(payment, "providerPaymentId", row.providerPaymentId);
+      payment.amount = money(row.amount, row.currency);
+      payment.currency = row.currency;
+      payment.method = row.method;
+      payment.status = row.status;
+      opt(payment, "metadata", row.metadata);
+      opt(payment, "failureCode", row.failureCode);
+      opt(payment, "failureMessage", row.failureMessage);
+      payment.createdAt = iso(row.createdAt);
+      payment.updatedAt = iso(row.updatedAt);
+      return payment;
+    }),
+
+    paymentAttempts: paymentAttempts.map((row) => {
+      const attempt = {
+        id: row.id,
+        paymentId: row.paymentId,
+        orderId: row.orderId,
+        provider: row.provider,
+      };
+      opt(attempt, "providerReference", row.providerReference);
+      attempt.amount = money(row.amount, row.currency);
+      attempt.currency = row.currency;
+      attempt.status = row.status;
+      attempt.idempotencyKey = row.idempotencyKey;
+      opt(attempt, "failureCode", row.failureCode);
+      opt(attempt, "failureMessage", row.failureMessage);
+      opt(attempt, "metadata", row.metadata);
+      attempt.createdAt = iso(row.createdAt);
+      attempt.updatedAt = iso(row.updatedAt);
+      return attempt;
+    }),
+
+    paymentActivities: paymentActivities.map((row) => {
+      const activity = {
+        id: row.id,
+        paymentId: row.paymentId,
+        orderId: row.orderId,
+        type: row.type,
+        createdAt: iso(row.createdAt),
+      };
+      opt(activity, "actorUserId", row.actorUserId);
+      opt(activity, "fromStatus", row.fromStatus);
+      opt(activity, "toStatus", row.toStatus);
+      opt(activity, "metadata", row.metadata);
+      return activity;
+    }),
+
+    paymentWebhookEvents: paymentWebhookEvents.map((row) => {
+      const event = {
+        id: row.id,
+        provider: row.provider,
+        providerEventId: row.providerEventId,
+      };
+      opt(event, "paymentId", row.paymentId);
+      opt(event, "orderId", row.orderId);
+      event.eventType = row.eventType;
+      opt(event, "processedAt", row.processedAt);
+      opt(event, "metadata", row.metadata);
+      event.createdAt = iso(row.createdAt);
+      event.updatedAt = iso(row.updatedAt);
+      return event;
+    }),
+
+    shipments: shipments.map((row) => {
+      const shipment = {
+        id: row.id,
+        orderId: row.orderId,
+        status: row.status,
+        method: row.method,
+      };
+      opt(shipment, "carrier", row.carrier);
+      opt(shipment, "trackingNumber", row.trackingNumber);
+      opt(shipment, "estimatedDelivery", row.estimatedDelivery);
+      opt(shipment, "shippedAt", row.shippedAt);
+      opt(shipment, "deliveredAt", row.deliveredAt);
+      opt(shipment, "cancelledAt", row.cancelledAt);
+      opt(shipment, "metadata", row.metadata);
+      shipment.createdAt = iso(row.createdAt);
+      shipment.updatedAt = iso(row.updatedAt);
+      return shipment;
+    }),
+
+    shipmentActivities: shipmentActivities.map((row) => {
+      const activity = {
+        id: row.id,
+        shipmentId: row.shipmentId,
+        orderId: row.orderId,
+        type: row.type,
+        createdAt: iso(row.createdAt),
+      };
+      opt(activity, "actorUserId", row.actorUserId);
+      opt(activity, "fromStatus", row.fromStatus);
+      opt(activity, "toStatus", row.toStatus);
+      opt(activity, "metadata", row.metadata);
+      return activity;
+    }),
+
+    shipmentWebhookEvents: shipmentWebhookEvents.map((row) => {
+      const event = {
+        id: row.id,
+        carrier: row.carrier,
+        providerEventId: row.providerEventId,
+      };
+      opt(event, "shipmentId", row.shipmentId);
+      opt(event, "orderId", row.orderId);
+      event.eventType = row.eventType;
+      opt(event, "processedAt", row.processedAt);
+      opt(event, "metadata", row.metadata);
+      event.createdAt = iso(row.createdAt);
+      event.updatedAt = iso(row.updatedAt);
+      return event;
+    }),
+
     users: users.map((row) => {
       const user = { id: row.id, kind: row.kind, name: row.name };
       opt(user, "email", row.email);
@@ -427,6 +561,13 @@ export async function countAll(prisma) {
     orderNotes,
     customizationActivities,
     customizationNotes,
+    payments,
+    paymentAttempts,
+    paymentActivities,
+    paymentWebhookEvents,
+    shipments,
+    shipmentActivities,
+    shipmentWebhookEvents,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.authCredential.count(),
@@ -453,6 +594,13 @@ export async function countAll(prisma) {
     prisma.orderNote.count(),
     prisma.customizationActivity.count(),
     prisma.customizationNote.count(),
+    prisma.payment.count(),
+    prisma.paymentAttempt.count(),
+    prisma.paymentActivity.count(),
+    prisma.paymentWebhookEvent.count(),
+    prisma.shipment.count(),
+    prisma.shipmentActivity.count(),
+    prisma.shipmentWebhookEvent.count(),
   ]);
   return {
     users,
@@ -480,5 +628,12 @@ export async function countAll(prisma) {
     orderNotes,
     customizationActivities,
     customizationNotes,
+    payments,
+    paymentAttempts,
+    paymentActivities,
+    paymentWebhookEvents,
+    shipments,
+    shipmentActivities,
+    shipmentWebhookEvents,
   };
 }

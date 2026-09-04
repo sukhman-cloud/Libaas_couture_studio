@@ -61,8 +61,10 @@ export function OrderOperations({
         ) : (
           <p className="mt-2 text-sm text-muted">No further status changes are available.</p>
         )}
-        {statusState.message && <p className="mt-3 text-sm text-success">{statusState.message}</p>}
-        {!statusState.ok && <p className="mt-3 text-sm text-danger">{statusState.error}</p>}
+        <div role="status" aria-live="polite">
+          {statusState.message && <p className="mt-3 text-sm text-success">{statusState.message}</p>}
+          {!statusState.ok && <p className="mt-3 text-sm text-danger">{statusState.error}</p>}
+        </div>
       </section>
 
       <section className="rounded-2xl border border-cream-200 bg-surface p-4 sm:p-5">
@@ -81,8 +83,10 @@ export function OrderOperations({
             {notePending ? "Saving..." : "Add note"}
           </button>
         </form>
-        {noteState.message && <p className="mt-3 text-sm text-success">{noteState.message}</p>}
-        {!noteState.ok && <p className="mt-3 text-sm text-danger">{noteState.error}</p>}
+        <div role="status" aria-live="polite">
+          {noteState.message && <p className="mt-3 text-sm text-success">{noteState.message}</p>}
+          {!noteState.ok && <p className="mt-3 text-sm text-danger">{noteState.error}</p>}
+        </div>
       </section>
     </div>
   );

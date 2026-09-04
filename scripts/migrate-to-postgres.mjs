@@ -121,6 +121,13 @@ const src = {
   orderNotes: store.orderNotes ?? [],
   customizationActivities: store.customizationActivities ?? [],
   customizationNotes: store.customizationNotes ?? [],
+  payments: store.payments ?? [],
+  paymentAttempts: store.paymentAttempts ?? [],
+  paymentActivities: store.paymentActivities ?? [],
+  paymentWebhookEvents: store.paymentWebhookEvents ?? [],
+  shipments: store.shipments ?? [],
+  shipmentActivities: store.shipmentActivities ?? [],
+  shipmentWebhookEvents: store.shipmentWebhookEvents ?? [],
 };
 
 const planned = {
@@ -161,6 +168,13 @@ const planned = {
   orderNotes: src.orderNotes.length,
   customizationActivities: src.customizationActivities.length,
   customizationNotes: src.customizationNotes.length,
+  payments: src.payments.length,
+  paymentAttempts: src.paymentAttempts.length,
+  paymentActivities: src.paymentActivities.length,
+  paymentWebhookEvents: src.paymentWebhookEvents.length,
+  shipments: src.shipments.length,
+  shipmentActivities: src.shipmentActivities.length,
+  shipmentWebhookEvents: src.shipmentWebhookEvents.length,
 };
 
 // The PostgreSQL provider looks emails up lowercase and SKUs uppercase
@@ -536,6 +550,114 @@ async function importAll(tx) {
       authorName: note.authorName,
       body: note.body,
       createdAt: date(note.createdAt),
+    })),
+  });
+
+  await tx.payment.createMany({
+    data: src.payments.map((p) => ({
+      id: p.id,
+      orderId: p.orderId,
+      provider: p.provider,
+      providerPaymentId: p.providerPaymentId ?? null,
+      amount: BigInt(p.amount.amount),
+      currency: p.currency,
+      method: p.method,
+      status: p.status,
+      metadata: p.metadata ?? undefined,
+      failureCode: p.failureCode ?? null,
+      failureMessage: p.failureMessage ?? null,
+      createdAt: date(p.createdAt),
+      updatedAt: date(p.updatedAt),
+    })),
+  });
+  await tx.paymentAttempt.createMany({
+    data: src.paymentAttempts.map((a) => ({
+      id: a.id,
+      paymentId: a.paymentId,
+      orderId: a.orderId,
+      provider: a.provider,
+      providerReference: a.providerReference ?? null,
+      amount: BigInt(a.amount.amount),
+      currency: a.currency,
+      status: a.status,
+      idempotencyKey: a.idempotencyKey,
+      failureCode: a.failureCode ?? null,
+      failureMessage: a.failureMessage ?? null,
+      metadata: a.metadata ?? undefined,
+      createdAt: date(a.createdAt),
+      updatedAt: date(a.updatedAt),
+    })),
+  });
+  await tx.paymentActivity.createMany({
+    data: src.paymentActivities.map((activity) => ({
+      id: activity.id,
+      paymentId: activity.paymentId,
+      orderId: activity.orderId,
+      type: activity.type,
+      actorUserId: activity.actorUserId ?? null,
+      fromStatus: activity.fromStatus ?? null,
+      toStatus: activity.toStatus ?? null,
+      metadata: activity.metadata ?? undefined,
+      createdAt: date(activity.createdAt),
+    })),
+  });
+  await tx.paymentWebhookEvent.createMany({
+    data: src.paymentWebhookEvents.map((event) => ({
+      id: event.id,
+      provider: event.provider,
+      providerEventId: event.providerEventId,
+      paymentId: event.paymentId ?? null,
+      orderId: event.orderId ?? null,
+      eventType: event.eventType,
+      processedAt: event.processedAt ? date(event.processedAt) : null,
+      metadata: event.metadata ?? undefined,
+      createdAt: date(event.createdAt),
+      updatedAt: date(event.updatedAt),
+    })),
+  });
+
+  await tx.shipment.createMany({
+    data: src.shipments.map((s) => ({
+      id: s.id,
+      orderId: s.orderId,
+      status: s.status,
+      method: s.method,
+      carrier: s.carrier ?? null,
+      trackingNumber: s.trackingNumber ?? null,
+      estimatedDelivery: s.estimatedDelivery ?? null,
+      shippedAt: s.shippedAt ? date(s.shippedAt) : null,
+      deliveredAt: s.deliveredAt ? date(s.deliveredAt) : null,
+      cancelledAt: s.cancelledAt ? date(s.cancelledAt) : null,
+      metadata: s.metadata ?? undefined,
+      createdAt: date(s.createdAt),
+      updatedAt: date(s.updatedAt),
+    })),
+  });
+  await tx.shipmentActivity.createMany({
+    data: src.shipmentActivities.map((activity) => ({
+      id: activity.id,
+      shipmentId: activity.shipmentId,
+      orderId: activity.orderId,
+      type: activity.type,
+      actorUserId: activity.actorUserId ?? null,
+      fromStatus: activity.fromStatus ?? null,
+      toStatus: activity.toStatus ?? null,
+      metadata: activity.metadata ?? undefined,
+      createdAt: date(activity.createdAt),
+    })),
+  });
+  await tx.shipmentWebhookEvent.createMany({
+    data: src.shipmentWebhookEvents.map((event) => ({
+      id: event.id,
+      carrier: event.carrier,
+      providerEventId: event.providerEventId,
+      shipmentId: event.shipmentId ?? null,
+      orderId: event.orderId ?? null,
+      eventType: event.eventType,
+      processedAt: event.processedAt ? date(event.processedAt) : null,
+      metadata: event.metadata ?? undefined,
+      createdAt: date(event.createdAt),
+      updatedAt: date(event.updatedAt),
     })),
   });
 

@@ -4,8 +4,10 @@
  *
  *   DATABASE_URL=... node scripts/export-postgres-store.mjs <output-path>
  *
- * Writes a current-version (v5) store file the JSON provider can serve directly (builds older than Phase 7B refuse v5 fail-closed - roll code back BEFORE exporting if you need a v4 file), so
- * switching back from the database is always possible: export, point
+ * Writes a current-version (v9) store file the JSON provider can serve
+ * directly (a build older than the version this script emits will refuse it
+ * fail-closed — roll code back BEFORE exporting if you need an older-version
+ * file), so switching back from the database is always possible: export, point
  * DATA_DIR at a directory holding the exported file as dev-store.json, and
  * set DATA_PROVIDER=file.
  *

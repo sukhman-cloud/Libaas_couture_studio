@@ -126,6 +126,13 @@ const plannedCounts = {
   orderNotes: source.orderNotes?.length ?? 0,
   customizationActivities: source.customizationActivities?.length ?? 0,
   customizationNotes: source.customizationNotes?.length ?? 0,
+  payments: source.payments?.length ?? 0,
+  paymentAttempts: source.paymentAttempts?.length ?? 0,
+  paymentActivities: source.paymentActivities?.length ?? 0,
+  paymentWebhookEvents: source.paymentWebhookEvents?.length ?? 0,
+  shipments: source.shipments?.length ?? 0,
+  shipmentActivities: source.shipmentActivities?.length ?? 0,
+  shipmentWebhookEvents: source.shipmentWebhookEvents?.length ?? 0,
 };
 for (const [table, expected] of Object.entries(plannedCounts)) {
   if (dbCounts[table] === expected) {
@@ -155,6 +162,13 @@ const ENTITY_COLLECTIONS = [
   "orderNotes",
   "customizationActivities",
   "customizationNotes",
+  "payments",
+  "paymentAttempts",
+  "paymentActivities",
+  "paymentWebhookEvents",
+  "shipments",
+  "shipmentActivities",
+  "shipmentWebhookEvents",
 ];
 
 for (const collection of ENTITY_COLLECTIONS) {

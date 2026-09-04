@@ -74,10 +74,12 @@ export function ShippingOperations({
             {createPending ? "Creating..." : "Create shipment"}
           </button>
         </form>
-        {createState.message && (
-          <p className="mt-3 text-sm text-success">{createState.message}</p>
-        )}
-        {!createState.ok && <p className="mt-3 text-sm text-danger">{createState.error}</p>}
+        <div role="status" aria-live="polite">
+          {createState.message && (
+            <p className="mt-3 text-sm text-success">{createState.message}</p>
+          )}
+          {!createState.ok && <p className="mt-3 text-sm text-danger">{createState.error}</p>}
+        </div>
       </section>
     );
   }
@@ -119,10 +121,12 @@ export function ShippingOperations({
         ) : (
           <p className="mt-2 text-sm text-muted">No further fulfillment changes are available.</p>
         )}
-        {statusState.message && (
-          <p className="mt-3 text-sm text-success">{statusState.message}</p>
-        )}
-        {!statusState.ok && <p className="mt-3 text-sm text-danger">{statusState.error}</p>}
+        <div role="status" aria-live="polite">
+          {statusState.message && (
+            <p className="mt-3 text-sm text-success">{statusState.message}</p>
+          )}
+          {!statusState.ok && <p className="mt-3 text-sm text-danger">{statusState.error}</p>}
+        </div>
       </section>
 
       <section className="rounded-2xl border border-cream-200 bg-surface p-4 sm:p-5">
@@ -160,10 +164,12 @@ export function ShippingOperations({
             {trackingPending ? "Saving..." : "Save tracking"}
           </button>
         </form>
-        {trackingState.message && (
-          <p className="mt-3 text-sm text-success">{trackingState.message}</p>
-        )}
-        {!trackingState.ok && <p className="mt-3 text-sm text-danger">{trackingState.error}</p>}
+        <div role="status" aria-live="polite">
+          {trackingState.message && (
+            <p className="mt-3 text-sm text-success">{trackingState.message}</p>
+          )}
+          {!trackingState.ok && <p className="mt-3 text-sm text-danger">{trackingState.error}</p>}
+        </div>
       </section>
     </div>
   );

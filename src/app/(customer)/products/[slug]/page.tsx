@@ -442,8 +442,13 @@ export default async function ProductPage({
 
       <script
         type="application/ld+json"
-        // Values come from the product record only.
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        // Values come from the product record only. JSON.stringify does not
+        // escape "</script>", so a product name/description containing that
+        // sequence could otherwise break out of this block — escaped here
+        // defensively even though only admins write product content.
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
+        }}
       />
     </Container>
   );
