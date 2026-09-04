@@ -25,6 +25,9 @@ import type {
   Product,
   ProductAttributes,
   ProductMedia,
+  Shipment,
+  ShipmentActivity,
+  ShipmentWebhookEvent,
   User,
   Wishlist,
   WishlistItem,
@@ -940,6 +943,82 @@ export function toPaymentWebhookEvent(
     ...(row.metadata === null
       ? {}
       : { metadata: row.metadata as PaymentWebhookEvent["metadata"] }),
+    createdAt: iso(row.createdAt),
+    updatedAt: iso(row.updatedAt),
+  };
+}
+
+/* ── shipping (Phase 11) ────────────────────────────────────────── */
+
+export function toShipment(row: Prisma.ShipmentGetPayload<object>): Shipment {
+  return {
+    id: row.id,
+    orderId: row.orderId,
+    status: row.status,
+    method: row.method,
+    ...opt("carrier", row.carrier),
+    ...opt("trackingNumber", row.trackingNumber),
+    ...opt("estimatedDelivery", row.estimatedDelivery),
+    ...optDate("shippedAt", row.shippedAt),
+    ...optDate("deliveredAt", row.deliveredAt),
+    ...optDate("cancelledAt", row.cancelledAt),
+    ...(row.metadata === null
+      ? {}
+      : { metadata: row.metadata as Shipment["metadata"] }),
+    createdAt: iso(row.createdAt),
+    updatedAt: iso(row.updatedAt),
+  };
+}
+
+export function shipmentColumns(shipment: Shipment) {
+  return {
+    orderId: shipment.orderId,
+    status: shipment.status,
+    method: shipment.method,
+    carrier: shipment.carrier ?? null,
+    trackingNumber: shipment.trackingNumber ?? null,
+    estimatedDelivery: shipment.estimatedDelivery ?? null,
+    shippedAt: shipment.shippedAt ? new Date(shipment.shippedAt) : null,
+    deliveredAt: shipment.deliveredAt ? new Date(shipment.deliveredAt) : null,
+    cancelledAt: shipment.cancelledAt ? new Date(shipment.cancelledAt) : null,
+    metadata: shipment.metadata ?? Prisma.DbNull,
+    createdAt: new Date(shipment.createdAt),
+    updatedAt: new Date(shipment.updatedAt),
+  };
+}
+
+export function toShipmentActivity(
+  row: Prisma.ShipmentActivityGetPayload<object>,
+): ShipmentActivity {
+  return {
+    id: row.id,
+    shipmentId: row.shipmentId,
+    orderId: row.orderId,
+    type: row.type as ShipmentActivity["type"],
+    ...opt("actorUserId", row.actorUserId),
+    ...opt("fromStatus", row.fromStatus),
+    ...opt("toStatus", row.toStatus),
+    ...(row.metadata === null
+      ? {}
+      : { metadata: row.metadata as ShipmentActivity["metadata"] }),
+    createdAt: iso(row.createdAt),
+  };
+}
+
+export function toShipmentWebhookEvent(
+  row: Prisma.ShipmentWebhookEventGetPayload<object>,
+): ShipmentWebhookEvent {
+  return {
+    id: row.id,
+    carrier: row.carrier,
+    providerEventId: row.providerEventId,
+    ...opt("shipmentId", row.shipmentId),
+    ...opt("orderId", row.orderId),
+    eventType: row.eventType,
+    ...optDate("processedAt", row.processedAt),
+    ...(row.metadata === null
+      ? {}
+      : { metadata: row.metadata as ShipmentWebhookEvent["metadata"] }),
     createdAt: iso(row.createdAt),
     updatedAt: iso(row.updatedAt),
   };

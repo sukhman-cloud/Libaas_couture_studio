@@ -70,6 +70,9 @@ const COLLECTIONS = [
   "paymentAttempts",
   "paymentActivities",
   "paymentWebhookEvents",
+  "shipments",
+  "shipmentActivities",
+  "shipmentWebhookEvents",
 ];
 
 for (const key of COLLECTIONS) {
@@ -734,6 +737,84 @@ for (const event of paymentWebhookEvents) {
   }
   if (event.orderId && !orderIds.has(event.orderId)) {
     problem("orphan", `PaymentWebhookEvent ${event.id} references missing order ${event.orderId}.`);
+  }
+}
+
+/* ── shipping & fulfillment (Phase 11 foundation) ───────────────── */
+
+const SHIPMENT_STATUSES = new Set([
+  "not_ready", "preparing", "ready_to_ship", "shipped", "out_for_delivery",
+  "delivered", "delivery_failed", "returned", "cancelled",
+]);
+const SHIPMENT_METHODS = new Set(["standard", "local_delivery", "pickup", "provider_managed"]);
+
+const shipments = rows("shipments");
+checkIds(shipments, "shipments");
+checkTimestamps(shipments, "shipment");
+checkDuplicates(shipments, "shipments", (s) => s.orderId, "orderId");
+for (const shipment of shipments) {
+  if (!orderIds.has(shipment.orderId)) {
+    problem("orphan", `Shipment ${shipment.id} references missing order ${shipment.orderId}.`);
+  }
+  if (!SHIPMENT_STATUSES.has(shipment.status)) {
+    problem("shape", `Shipment ${shipment.id}: unknown status "${shipment.status}".`);
+  }
+  if (!SHIPMENT_METHODS.has(shipment.method)) {
+    problem("shape", `Shipment ${shipment.id}: unknown method "${shipment.method}".`);
+  }
+  if (shipment.carrier !== undefined && (typeof shipment.carrier !== "string" || shipment.carrier.length > 80)) {
+    problem("shape", `Shipment ${shipment.id}: carrier is invalid or over 80 chars.`);
+  }
+  if (
+    shipment.trackingNumber !== undefined &&
+    (typeof shipment.trackingNumber !== "string" || shipment.trackingNumber.length > 100)
+  ) {
+    problem("shape", `Shipment ${shipment.id}: trackingNumber is invalid or over 100 chars.`);
+  }
+  // No delivery address on the shipment — it must always be read from the
+  // order's own immutable snapshot (Phase 6C), never duplicated here.
+  if ("shippingAddress" in shipment || "address" in shipment) {
+    problem("shape", `Shipment ${shipment.id}: must not carry its own address copy.`);
+  }
+}
+
+const shipmentIds = new Set(shipments.map((s) => s.id));
+const shipmentActivities = rows("shipmentActivities");
+checkIds(shipmentActivities, "shipmentActivities");
+checkTimestamps(shipmentActivities, "shipmentActivity", { requireUpdated: false });
+for (const activity of shipmentActivities) {
+  if (!shipmentIds.has(activity.shipmentId)) {
+    problem("orphan", `ShipmentActivity ${activity.id} references missing shipment ${activity.shipmentId}.`);
+  }
+  if (!orderIds.has(activity.orderId)) {
+    problem("orphan", `ShipmentActivity ${activity.id} references missing order ${activity.orderId}.`);
+  }
+  if (activity.fromStatus && !SHIPMENT_STATUSES.has(activity.fromStatus)) {
+    problem("shape", `ShipmentActivity ${activity.id}: invalid fromStatus.`);
+  }
+  if (activity.toStatus && !SHIPMENT_STATUSES.has(activity.toStatus)) {
+    problem("shape", `ShipmentActivity ${activity.id}: invalid toStatus.`);
+  }
+  if (activity.actorUserId && !userIds.has(activity.actorUserId)) {
+    problem("orphan", `ShipmentActivity ${activity.id} references missing actor ${activity.actorUserId}.`);
+  }
+}
+
+const shipmentWebhookEvents = rows("shipmentWebhookEvents");
+checkIds(shipmentWebhookEvents, "shipmentWebhookEvents");
+checkTimestamps(shipmentWebhookEvents, "shipmentWebhookEvent");
+checkDuplicates(
+  shipmentWebhookEvents,
+  "shipmentWebhookEvents",
+  (e) => `${e.carrier}::${e.providerEventId}`,
+  "carrier + providerEventId",
+);
+for (const event of shipmentWebhookEvents) {
+  if (event.shipmentId && !shipmentIds.has(event.shipmentId)) {
+    problem("orphan", `ShipmentWebhookEvent ${event.id} references missing shipment ${event.shipmentId}.`);
+  }
+  if (event.orderId && !orderIds.has(event.orderId)) {
+    problem("orphan", `ShipmentWebhookEvent ${event.id} references missing order ${event.orderId}.`);
   }
 }
 

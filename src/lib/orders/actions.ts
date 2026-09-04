@@ -3,8 +3,11 @@
 import { revalidatePath } from "next/cache";
 import {
   addAdminOrderNote,
+  createAdminShipment,
   recordAdminManualPayment,
   transitionAdminOrder,
+  transitionAdminShipment,
+  updateAdminShipmentTracking,
   type AdminOrderMutationResult,
 } from "@/server/orders/admin";
 
@@ -62,6 +65,69 @@ export async function recordManualPaymentAction(
     revalidatePath(`/admin/orders/${orderNumber}`);
     revalidatePath(`/account/orders/${orderNumber}`);
     return { ...result, message: "Payment recorded as paid." };
+  }
+  return result;
+}
+
+function revalidateOrder(orderNumber: string) {
+  revalidatePath(`/admin/orders/${orderNumber}`);
+  revalidatePath("/admin/orders");
+  revalidatePath(`/account/orders/${orderNumber}`);
+}
+
+export async function createShipmentAction(
+  _previous: OrderActionState,
+  formData: FormData,
+): Promise<OrderActionState> {
+  const orderNumber = formData.get("orderNumber");
+  const method = formData.get("method");
+  if (typeof orderNumber !== "string" || typeof method !== "string") {
+    return { ok: false, error: "Invalid shipment request." };
+  }
+  const result = await createAdminShipment(orderNumber, method);
+  if (result.ok) {
+    revalidateOrder(orderNumber);
+    return { ...result, message: "Shipment created." };
+  }
+  return result;
+}
+
+export async function transitionShipmentAction(
+  _previous: OrderActionState,
+  formData: FormData,
+): Promise<OrderActionState> {
+  const orderNumber = formData.get("orderNumber");
+  const nextStatus = formData.get("nextStatus");
+  if (typeof orderNumber !== "string" || typeof nextStatus !== "string") {
+    return { ok: false, error: "Invalid shipment action." };
+  }
+  const result = await transitionAdminShipment(orderNumber, nextStatus);
+  if (result.ok) {
+    revalidateOrder(orderNumber);
+    return { ...result, message: "Shipment status updated." };
+  }
+  return result;
+}
+
+export async function updateShipmentTrackingAction(
+  _previous: OrderActionState,
+  formData: FormData,
+): Promise<OrderActionState> {
+  const orderNumber = formData.get("orderNumber");
+  if (typeof orderNumber !== "string") {
+    return { ok: false, error: "Invalid order." };
+  }
+  const carrier = formData.get("carrier");
+  const trackingNumber = formData.get("trackingNumber");
+  const estimatedDelivery = formData.get("estimatedDelivery");
+  const result = await updateAdminShipmentTracking(orderNumber, {
+    ...(typeof carrier === "string" ? { carrier } : {}),
+    ...(typeof trackingNumber === "string" ? { trackingNumber } : {}),
+    ...(typeof estimatedDelivery === "string" ? { estimatedDelivery } : {}),
+  });
+  if (result.ok) {
+    revalidateOrder(orderNumber);
+    return { ...result, message: "Tracking information saved." };
   }
   return result;
 }

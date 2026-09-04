@@ -16,6 +16,7 @@ import type {
   OrderActivity,
   OrderAddressSnapshot,
   OrderStatus,
+  PaymentStatus,
 } from "@/types/domain";
 import {
   isAllowedStatusTransition,
@@ -26,6 +27,17 @@ import {
   recordManualPayment,
   type AdminPaymentView,
 } from "@/server/payments/service";
+import {
+  computeFulfillmentReadiness,
+  createShipment,
+  getAdminShipmentForOrder,
+  transitionShipment,
+  updateShipmentTracking,
+  type AdminShipmentView,
+  type FulfillmentReadiness,
+} from "@/server/shipping/service";
+import { SHIPMENT_STATUSES } from "@/server/shipping/workflow";
+import type { ShipmentMethod, ShipmentStatus } from "@/types/domain";
 
 /**
  * Admin order reading (Phase 7C) — the studio's fulfillment view.
@@ -66,6 +78,12 @@ export interface AdminOrderListItem {
   totalQuantity: number;
   total: Money;
   hasStitchedItems: boolean;
+  /** Null when the order has no payment record yet. */
+  paymentStatus: PaymentStatus | null;
+  /** Null when the order has no shipment record yet. */
+  shipmentStatus: ShipmentStatus | null;
+  hasTracking: boolean;
+  fulfillmentReady: boolean;
 }
 
 /** Echo of the VALIDATED query — what the UI renders and re-links. */
@@ -123,6 +141,10 @@ export interface AdminOrderDetail {
   /** Null when the order has no payment record yet (pre-Phase-10 history
    *  or a failed initiation) — never fabricated. */
   payment: AdminPaymentView | null;
+  /** Null when the order has no shipment record yet (pre-Phase-11 history
+   *  or fulfillment hasn't started) — never fabricated. */
+  shipment: AdminShipmentView | null;
+  fulfillmentReadiness: FulfillmentReadiness;
   customizationRequests: Array<{
     id: string;
     status: string;
@@ -200,20 +222,42 @@ export async function listAdminOrders(raw: {
     offset: (page - 1) * ADMIN_ORDERS_PER_PAGE,
   });
 
+  const orderIds = paged.rows.map((order) => order.id);
+  const [payments, shipments] = await Promise.all([
+    repos.payments.listByOrderIds(orderIds),
+    repos.shipments.listByOrderIds(orderIds),
+  ]);
+  const paymentByOrderId = new Map(payments.map((p) => [p.orderId, p]));
+  const shipmentByOrderId = new Map(shipments.map((s) => [s.orderId, s]));
+
   return {
-    items: paged.rows.map((order) => ({
-      orderNumber: order.orderNumber,
-      placedAt: order.createdAt,
-      status: order.status,
-      customerName: order.customer.name,
-      ...(order.customer.email ? { customerEmail: order.customer.email } : {}),
-      itemCount: order.items.length,
-      totalQuantity: order.items.reduce((sum, i) => sum + i.quantity, 0),
-      total: order.total,
-      hasStitchedItems: order.items.some(
-        (i) => i.stitching?.selected === true,
-      ),
-    })),
+    items: paged.rows.map((order) => {
+      const shipment = shipmentByOrderId.get(order.id);
+      return {
+        orderNumber: order.orderNumber,
+        placedAt: order.createdAt,
+        status: order.status,
+        customerName: order.customer.name,
+        ...(order.customer.email ? { customerEmail: order.customer.email } : {}),
+        itemCount: order.items.length,
+        totalQuantity: order.items.reduce((sum, i) => sum + i.quantity, 0),
+        total: order.total,
+        hasStitchedItems: order.items.some(
+          (i) => i.stitching?.selected === true,
+        ),
+        paymentStatus: paymentByOrderId.get(order.id)?.status ?? null,
+        shipmentStatus: shipment?.status ?? null,
+        hasTracking: Boolean(shipment?.trackingNumber),
+        // List-row readiness omits customization status (a per-row lookup
+        // across a whole page would be an unbounded query); the detail
+        // page computes the full signal including open customizations.
+        fulfillmentReady: computeFulfillmentReadiness({
+          order,
+          paymentStatus: paymentByOrderId.get(order.id)?.status ?? null,
+          customizationStatuses: [],
+        }).ready,
+      };
+    }),
     query: { q, status, sort, page },
     pageCount,
     total: paged.total,
@@ -231,15 +275,21 @@ export async function getAdminOrderByNumber(
   if (!isOrderNumber(orderNumber)) return null;
   const order = await getRepositories().orders.getByOrderNumber(orderNumber);
   if (!order) return null;
-  const [items, activities, notes, payment] = await Promise.all([
+  const [items, activities, notes, payment, shipment] = await Promise.all([
     buildAdminItemViews(order),
     getRepositories().orderActivities.listByOrderId(order.id),
     getRepositories().orderNotes.listByOrderId(order.id),
     getAdminPaymentForOrder(order),
+    getAdminShipmentForOrder(order),
   ]);
   const customizationRequests = (await getRepositories().customizationRequests.list()).filter(
     (request) => request.orderId === order.id,
   );
+  const fulfillmentReadiness = computeFulfillmentReadiness({
+    order,
+    paymentStatus: payment?.status ?? null,
+    customizationStatuses: customizationRequests.map((request) => request.status),
+  });
 
   return {
     orderNumber: order.orderNumber,
@@ -263,6 +313,8 @@ export async function getAdminOrderByNumber(
       createdAt: note.createdAt,
     })),
     payment,
+    shipment,
+    fulfillmentReadiness,
     customizationRequests: customizationRequests.map((request) => ({
       id: request.id,
       status: request.status,
@@ -385,6 +437,90 @@ export async function recordAdminManualPayment(
   const result = await recordManualPayment({
     orderId: order.id,
     ...(auth.session.sub === "dev-admin" ? {} : { actorUserId: auth.session.sub }),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/* ── shipping / fulfillment (Phase 11 foundation) ─────────────────── */
+
+const SHIPMENT_METHODS: ShipmentMethod[] = ["standard", "local_delivery", "pickup", "provider_managed"];
+export const ADMIN_CARRIER_MAX = 80;
+export const ADMIN_TRACKING_MAX = 100;
+export const ADMIN_ESTIMATED_DELIVERY_MAX = 80;
+
+function actorFor(sub: string): string | undefined {
+  return sub === "dev-admin" ? undefined : sub;
+}
+
+/** Admin-only shipment creation. Idempotent — calling it again on an order
+ *  that already has a shipment is a safe no-op that returns success. */
+export async function createAdminShipment(
+  orderNumber: string,
+  method: string,
+): Promise<AdminOrderMutationResult> {
+  const auth = await authorizeAdmin("shipping.write");
+  if (!auth.ok) return { ok: false, error: auth.error };
+  if (!isOrderNumber(orderNumber)) return { ok: false, error: "Order not found." };
+  if (!SHIPMENT_METHODS.includes(method as ShipmentMethod)) {
+    return { ok: false, error: "That shipping method is not available." };
+  }
+
+  const order = await getRepositories().orders.getByOrderNumber(orderNumber);
+  if (!order) return { ok: false, error: "Order not found." };
+
+  const result = await createShipment({
+    orderId: order.id,
+    method: method as ShipmentMethod,
+    ...(actorFor(auth.session.sub) ? { actorUserId: actorFor(auth.session.sub) } : {}),
+  });
+  if (result.outcome === "rejected" || result.outcome === "failed") {
+    return { ok: false, error: result.message };
+  }
+  return { ok: true };
+}
+
+/** Admin-only, server-validated fulfillment status transition. */
+export async function transitionAdminShipment(
+  orderNumber: string,
+  nextStatus: string,
+): Promise<AdminOrderMutationResult> {
+  const auth = await authorizeAdmin("shipping.write");
+  if (!auth.ok) return { ok: false, error: auth.error };
+  if (!isOrderNumber(orderNumber)) return { ok: false, error: "Order not found." };
+  if (!SHIPMENT_STATUSES.includes(nextStatus as ShipmentStatus)) {
+    return { ok: false, error: "That shipping status is not available." };
+  }
+
+  const order = await getRepositories().orders.getByOrderNumber(orderNumber);
+  if (!order) return { ok: false, error: "Order not found." };
+
+  const result = await transitionShipment({
+    orderId: order.id,
+    nextStatus: nextStatus as ShipmentStatus,
+    ...(actorFor(auth.session.sub) ? { actorUserId: actorFor(auth.session.sub) } : {}),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/** Admin-only tracking/carrier update — validated, trimmed and capped
+ *  inside the service; this wrapper only resolves the order and actor. */
+export async function updateAdminShipmentTracking(
+  orderNumber: string,
+  fields: { carrier?: string; trackingNumber?: string; estimatedDelivery?: string },
+): Promise<AdminOrderMutationResult> {
+  const auth = await authorizeAdmin("shipping.write");
+  if (!auth.ok) return { ok: false, error: auth.error };
+  if (!isOrderNumber(orderNumber)) return { ok: false, error: "Order not found." };
+
+  const order = await getRepositories().orders.getByOrderNumber(orderNumber);
+  if (!order) return { ok: false, error: "Order not found." };
+
+  const result = await updateShipmentTracking({
+    orderId: order.id,
+    ...fields,
+    ...(actorFor(auth.session.sub) ? { actorUserId: actorFor(auth.session.sub) } : {}),
   });
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };

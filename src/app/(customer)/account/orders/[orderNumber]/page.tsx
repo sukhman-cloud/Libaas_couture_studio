@@ -6,6 +6,7 @@ import { ArrowLeft, ImageOff } from "lucide-react";
 import { OrderItemConfiguration } from "@/components/orders/order-item-configuration";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
 import { PaymentStatusBadge } from "@/components/orders/payment-status-badge";
+import { ShippingStatusBadge } from "@/components/orders/shipping-status-badge";
 import { buttonStyles } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -66,6 +67,7 @@ export default async function OrderDetailPage({
           <div className="flex flex-wrap items-center gap-2">
             <OrderStatusBadge status={order.status} />
             <PaymentStatusBadge status={order.payment?.status ?? null} />
+            <ShippingStatusBadge status={order.shipment?.status ?? null} />
           </div>
         }
       />
@@ -291,6 +293,53 @@ export default async function OrderDetailPage({
                 <Text tone="muted" size="sm">
                   Payment information is not available for this order. The
                   studio will confirm payment and delivery with you.
+                </Text>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4 sm:p-5">
+              <Heading level={2} className="mb-2 text-lg">
+                Shipping
+              </Heading>
+              {order.shipment ? (
+                <>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted">Status</span>
+                    <ShippingStatusBadge status={order.shipment.status} />
+                  </div>
+                  {order.shipment.carrier && (
+                    <div className="mt-2 flex items-center justify-between text-sm">
+                      <span className="text-muted">Carrier</span>
+                      <span>{order.shipment.carrier}</span>
+                    </div>
+                  )}
+                  {order.shipment.trackingNumber && (
+                    <div className="mt-2 flex items-center justify-between text-sm">
+                      <span className="text-muted">Tracking number</span>
+                      <span className="font-mono text-xs">{order.shipment.trackingNumber}</span>
+                    </div>
+                  )}
+                  {order.shipment.estimatedDelivery && (
+                    <div className="mt-2 flex items-center justify-between text-sm">
+                      <span className="text-muted">Estimated delivery</span>
+                      <span>{order.shipment.estimatedDelivery}</span>
+                    </div>
+                  )}
+                  <Text tone="muted" size="sm" className="mt-3">
+                    {order.shipment.status === "delivered"
+                      ? "This order has been delivered."
+                      : order.shipment.status === "shipped" ||
+                          order.shipment.status === "out_for_delivery"
+                        ? "Your order is on its way."
+                        : "The studio is preparing your order for shipment."}
+                  </Text>
+                </>
+              ) : (
+                <Text tone="muted" size="sm">
+                  Shipping information is not available for this order yet.
+                  The studio will confirm delivery details with you.
                 </Text>
               )}
             </CardContent>

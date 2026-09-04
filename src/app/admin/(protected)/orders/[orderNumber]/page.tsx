@@ -6,8 +6,11 @@ import { ArrowLeft, ImageOff } from "lucide-react";
 import { OrderItemConfiguration } from "@/components/orders/order-item-configuration";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
 import { PaymentStatusBadge } from "@/components/orders/payment-status-badge";
+import { ShippingStatusBadge } from "@/components/orders/shipping-status-badge";
 import { OrderOperations } from "@/components/admin/order-operations";
 import { PaymentOperations } from "@/components/admin/payment-operations";
+import { ShippingOperations } from "@/components/admin/shipping-operations";
+import { Alert } from "@/components/ui/alert";
 import { buttonStyles } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -15,6 +18,7 @@ import { Caption, Heading, Text } from "@/components/ui/typography";
 import { formatPrice } from "@/lib/utils";
 import { getAdminOrderByNumber } from "@/server/orders/admin";
 import { allowedNextStatuses, ORDER_STATUS_LABELS } from "@/server/orders/workflow";
+import { allowedNextShipmentStatuses, SHIPMENT_STATUS_LABELS } from "@/server/shipping/workflow";
 import { CUSTOMIZATION_STATUS_LABELS } from "@/server/customization/workflow";
 
 export const metadata: Metadata = { title: "Admin · Order" };
@@ -25,6 +29,37 @@ const formatDate = (iso: string) =>
     month: "short",
     year: "numeric",
   });
+
+const ORDER_ACTIVITY_LABELS: Record<string, string> = {
+  order_created: "Order created",
+  order_cancelled: "Order cancelled",
+  internal_note_added: "Internal note added",
+  payment_created: "Payment created",
+  payment_attempt_started: "Payment attempt started",
+  payment_succeeded: "Payment succeeded",
+  payment_failed: "Payment failed",
+  payment_cancelled: "Payment cancelled",
+  payment_refunded: "Payment refunded",
+  payment_webhook_processed: "Payment webhook processed",
+  shipment_created: "Shipment created",
+  shipment_preparing: "Marked preparing",
+  shipment_ready_to_ship: "Marked ready to ship",
+  shipment_dispatched: "Shipment dispatched",
+  shipment_out_for_delivery: "Out for delivery",
+  shipment_delivered: "Delivered",
+  shipment_delivery_failed: "Delivery failed",
+  shipment_returned: "Returned",
+  shipment_cancelled: "Shipment cancelled",
+  shipment_tracking_updated: "Tracking updated",
+  shipment_webhook_processed: "Shipment webhook processed",
+};
+
+function orderActivityLabel(activity: { type: string; toStatus?: string }): string {
+  if (activity.type === "status_changed") {
+    return `Status changed to ${activity.toStatus ? ORDER_STATUS_LABELS[activity.toStatus as keyof typeof ORDER_STATUS_LABELS] : "updated"}`;
+  }
+  return ORDER_ACTIVITY_LABELS[activity.type] ?? activity.type.replace(/_/g, " ");
+}
 
 /**
  * Admin order detail (Phase 7C) — everything the studio needs to fulfil
@@ -61,11 +96,18 @@ export default async function AdminOrderDetailPage({
           <div className="flex flex-wrap items-center gap-2">
             <OrderStatusBadge status={order.status} />
             <PaymentStatusBadge status={order.payment?.status ?? null} />
+            <ShippingStatusBadge status={order.shipment?.status ?? null} />
           </div>
         }
       />
 
       <div className="space-y-5">
+        {!order.fulfillmentReadiness.ready && (
+          <Alert tone="warning">
+            <span className="font-medium">Not ready for fulfillment.</span>{" "}
+            {order.fulfillmentReadiness.blockingReasons.join(" ")}
+          </Alert>
+        )}
         <div className="grid gap-5 lg:grid-cols-2">
           <Card>
             <CardContent className="space-y-2 p-4 sm:p-5">
@@ -117,6 +159,67 @@ export default async function AdminOrderDetailPage({
               ) : (
                 <Text tone="muted" size="sm">
                   No payment record for this order yet.
+                </Text>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="space-y-2 p-4 sm:p-5">
+              <Heading level={2} className="text-lg">
+                Shipping
+              </Heading>
+              {order.shipment ? (
+                <>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted">Status</span>
+                    <ShippingStatusBadge status={order.shipment.status} />
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted">Method</span>
+                    <span className="capitalize">
+                      {order.shipment.method.replace(/_/g, " ")}
+                    </span>
+                  </div>
+                  {order.shipment.carrier && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted">Carrier</span>
+                      <span>{order.shipment.carrier}</span>
+                    </div>
+                  )}
+                  {order.shipment.trackingNumber && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted">Tracking number</span>
+                      <span className="font-mono text-xs">{order.shipment.trackingNumber}</span>
+                    </div>
+                  )}
+                  {order.shipment.estimatedDelivery && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted">Estimated delivery</span>
+                      <span>{order.shipment.estimatedDelivery}</span>
+                    </div>
+                  )}
+                  {order.shipment.activities.length > 0 && (
+                    <div className="border-t border-cream-200 pt-2">
+                      <Caption className="mb-1 block">Timeline</Caption>
+                      <ul className="space-y-1">
+                        {order.shipment.activities.map((activity, index) => (
+                          <li key={index} className="flex justify-between text-xs text-muted">
+                            <span>
+                              {activity.toStatus
+                                ? SHIPMENT_STATUS_LABELS[activity.toStatus]
+                                : activity.type.replace(/_/g, " ")}
+                            </span>
+                            <span>{formatDate(activity.createdAt)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <Text tone="muted" size="sm">
+                  No shipment record for this order yet.
                 </Text>
               )}
             </CardContent>
@@ -189,9 +292,23 @@ export default async function AdminOrderDetailPage({
 
         <Card>
           <CardContent className="space-y-5 p-4 sm:p-5">
-            <Heading level={2} className="text-lg">
-              Items to fulfil
-            </Heading>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Heading level={2} className="text-lg">
+                Items to fulfil
+              </Heading>
+              <div className="flex flex-wrap gap-2">
+                {order.fulfillmentReadiness.hasStitchedItems && (
+                  <span className="rounded-full bg-cream-100 px-3 py-1 text-xs font-medium text-navy-700">
+                    Stitching required
+                  </span>
+                )}
+                {order.fulfillmentReadiness.hasCustomization && (
+                  <span className="rounded-full bg-cream-100 px-3 py-1 text-xs font-medium text-navy-700">
+                    Customization attached
+                  </span>
+                )}
+              </div>
+            </div>
             <ul className="space-y-5">
               {order.items.map((item, index) => (
                 <li
@@ -310,6 +427,17 @@ export default async function AdminOrderDetailPage({
           status={order.payment?.status ?? null}
         />
 
+        <ShippingOperations
+          orderNumber={order.orderNumber}
+          hasShipment={order.shipment !== null}
+          nextStatuses={
+            order.shipment ? allowedNextShipmentStatuses(order.shipment.status) : []
+          }
+          carrier={order.shipment?.carrier}
+          trackingNumber={order.shipment?.trackingNumber}
+          estimatedDelivery={order.shipment?.estimatedDelivery}
+        />
+
         {(order.activities.length > 0 || order.notes.length > 0) && (
           <Card>
             <CardContent className="space-y-5 p-4 sm:p-5">
@@ -321,13 +449,7 @@ export default async function AdminOrderDetailPage({
                   {order.activities.map((activity, index) => (
                     <li key={`${activity.createdAt}-${index}`} className="text-sm">
                       <p className="font-medium text-navy-800">
-                        {activity.type === "order_created"
-                          ? "Order created"
-                          : activity.type === "order_cancelled"
-                            ? "Order cancelled"
-                            : activity.type === "internal_note_added"
-                              ? "Internal note added"
-                              : `Status changed to ${activity.toStatus ? ORDER_STATUS_LABELS[activity.toStatus] : "updated"}`}
+                        {orderActivityLabel(activity)}
                       </p>
                       <Caption className="block">
                         {activity.actorName} · {formatDate(activity.createdAt)}

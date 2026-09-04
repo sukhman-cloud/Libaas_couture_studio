@@ -120,6 +120,8 @@ export type Permission =
   | "appointments.write"
   | "payments.read"
   | "payments.write"
+  | "shipping.read"
+  | "shipping.write"
   | "staff.manage"
   | "settings.manage"
   | "content.manage"
@@ -464,7 +466,18 @@ export type OrderActivityType =
   | "payment_failed"
   | "payment_cancelled"
   | "payment_refunded"
-  | "payment_webhook_processed";
+  | "payment_webhook_processed"
+  | "shipment_created"
+  | "shipment_preparing"
+  | "shipment_ready_to_ship"
+  | "shipment_dispatched"
+  | "shipment_out_for_delivery"
+  | "shipment_delivered"
+  | "shipment_delivery_failed"
+  | "shipment_returned"
+  | "shipment_cancelled"
+  | "shipment_tracking_updated"
+  | "shipment_webhook_processed";
 
 export interface OrderActivity {
   id: ID;
@@ -678,6 +691,98 @@ export interface PaymentWebhookEvent extends Timestamps {
   provider: PaymentProvider;
   providerEventId: string;
   paymentId?: ID;
+  orderId?: ID;
+  eventType: string;
+  processedAt?: ISODateTime;
+  metadata?: Record<string, string | number | boolean | null>;
+}
+
+// ── Shipping & fulfillment (Phase 11 foundation) ────────────────────
+
+/**
+ * Fulfillment lifecycle — deliberately separate from OrderStatus and
+ * PaymentStatus, cross-referenced by orderId like Payment. An order can be
+ * "processing" while its shipment is "preparing"; a COD order can be
+ * "shipped" while its payment is "unpaid". No status here ever implies a
+ * value for the other two.
+ */
+export type ShipmentStatus =
+  | "not_ready"
+  | "preparing"
+  | "ready_to_ship"
+  | "shipped"
+  | "out_for_delivery"
+  | "delivered"
+  | "delivery_failed"
+  | "returned"
+  | "cancelled";
+
+/**
+ * Provider-agnostic method vocabulary. "provider_managed" is the reserved
+ * slot for a future real carrier integration (Shiprocket/Delhivery/etc.);
+ * nothing here talks to a real provider yet.
+ */
+export type ShipmentMethod = "standard" | "local_delivery" | "pickup" | "provider_managed";
+
+export type ShipmentActivityType =
+  | "shipment_created"
+  | "shipment_preparing"
+  | "shipment_ready_to_ship"
+  | "shipment_dispatched"
+  | "shipment_out_for_delivery"
+  | "shipment_delivered"
+  | "shipment_delivery_failed"
+  | "shipment_returned"
+  | "shipment_cancelled"
+  | "tracking_updated"
+  | "webhook_processed";
+
+/**
+ * One shipment per order — the order's fulfillment state. The delivery
+ * address is NEVER duplicated here: it lives exclusively on
+ * `Order.shippingAddress` (an immutable snapshot already), and every
+ * shipment reader re-reads it from the order. Carrier/tracking fields are
+ * admin-entered text, never a live provider lookup — no real carrier is
+ * integrated yet.
+ */
+export interface Shipment extends Timestamps {
+  id: ID;
+  orderId: ID;
+  status: ShipmentStatus;
+  method: ShipmentMethod;
+  carrier?: string;
+  trackingNumber?: string;
+  /** Free-text estimate ("3-5 business days") — never a computed live ETA. */
+  estimatedDelivery?: string;
+  shippedAt?: ISODateTime;
+  deliveredAt?: ISODateTime;
+  cancelledAt?: ISODateTime;
+  /** Safe operational metadata only — never a provider credential. */
+  metadata?: Record<string, string | number | boolean | null>;
+}
+
+export interface ShipmentActivity {
+  id: ID;
+  shipmentId: ID;
+  orderId: ID;
+  type: ShipmentActivityType;
+  actorUserId?: ID;
+  fromStatus?: ShipmentStatus;
+  toStatus?: ShipmentStatus;
+  metadata?: Record<string, string | number | boolean | null>;
+  createdAt: ISODateTime;
+}
+
+/**
+ * Webhook foundation only — no real carrier is connected. Mirrors
+ * PaymentWebhookEvent exactly: `(carrier, providerEventId)` is the
+ * idempotency key a future integration would dedupe on.
+ */
+export interface ShipmentWebhookEvent extends Timestamps {
+  id: ID;
+  carrier: string;
+  providerEventId: string;
+  shipmentId?: ID;
   orderId?: ID;
   eventType: string;
   processedAt?: ISODateTime;

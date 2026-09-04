@@ -67,6 +67,10 @@ import {
   toPaymentWebhookEvent,
   paymentColumns,
   paymentAttemptColumns,
+  toShipment,
+  toShipmentActivity,
+  toShipmentWebhookEvent,
+  shipmentColumns,
 } from "@/server/data/postgres/mappers";
 import type { CatalogStatus } from "@/types/domain";
 
@@ -704,6 +708,120 @@ function buildPostgresRepositories(db: Db): StoreRepositories {
         if (result.count === 0) return null;
         const row = await db.paymentWebhookEvent.findUniqueOrThrow({ where: { id } });
         return toPaymentWebhookEvent(row);
+      },
+    },
+
+    shipments: {
+      async getById(id) {
+        const row = await db.shipment.findUnique({ where: { id } });
+        return row ? toShipment(row) : null;
+      },
+      async getByOrderId(orderId) {
+        const row = await db.shipment.findUnique({ where: { orderId } });
+        return row ? toShipment(row) : null;
+      },
+      async listByOrderIds(orderIds) {
+        const rows = await db.shipment.findMany({
+          where: { orderId: { in: orderIds } },
+        });
+        return rows.map(toShipment);
+      },
+      async create(shipment) {
+        // orderId uniqueness (one shipment per order) is enforced by the
+        // database constraint; a violation surfaces as P2002.
+        const row = await db.shipment.create({
+          data: { id: shipment.id, ...shipmentColumns(shipment) },
+        });
+        return toShipment(row);
+      },
+      async update(shipment) {
+        return toShipment(
+          await orNotFound(
+            db.shipment.update({
+              where: { id: shipment.id },
+              data: shipmentColumns(shipment),
+            }),
+            "Shipment",
+            shipment.id,
+          ),
+        );
+      },
+      async transitionStatus(shipmentId, expectedStatus, nextStatus, updatedAt) {
+        const result = await db.shipment.updateMany({
+          where: { id: shipmentId, status: expectedStatus },
+          data: { status: nextStatus, updatedAt: new Date(updatedAt) },
+        });
+        if (result.count === 0) return null;
+        const row = await db.shipment.findUniqueOrThrow({ where: { id: shipmentId } });
+        return toShipment(row);
+      },
+    },
+
+    shipmentActivities: {
+      async listByShipmentId(shipmentId) {
+        const rows = await db.shipmentActivity.findMany({
+          where: { shipmentId },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        });
+        return rows.map(toShipmentActivity);
+      },
+      async create(activity) {
+        const row = await db.shipmentActivity.create({
+          data: {
+            id: activity.id,
+            shipmentId: activity.shipmentId,
+            orderId: activity.orderId,
+            type: activity.type,
+            actorUserId: activity.actorUserId ?? null,
+            fromStatus: activity.fromStatus ?? null,
+            toStatus: activity.toStatus ?? null,
+            metadata: activity.metadata ?? Prisma.DbNull,
+            createdAt: new Date(activity.createdAt),
+          },
+        });
+        return toShipmentActivity(row);
+      },
+    },
+
+    shipmentWebhookEvents: {
+      async getByProviderEvent(carrier, providerEventId) {
+        const row = await db.shipmentWebhookEvent.findUnique({
+          where: { carrier_providerEventId: { carrier, providerEventId } },
+        });
+        return row ? toShipmentWebhookEvent(row) : null;
+      },
+      async create(event) {
+        // (carrier, providerEventId) uniqueness is enforced by the database
+        // constraint; a violation surfaces as P2002.
+        const row = await db.shipmentWebhookEvent.create({
+          data: {
+            id: event.id,
+            carrier: event.carrier,
+            providerEventId: event.providerEventId,
+            shipmentId: event.shipmentId ?? null,
+            orderId: event.orderId ?? null,
+            eventType: event.eventType,
+            processedAt: event.processedAt ? new Date(event.processedAt) : null,
+            metadata: event.metadata ?? Prisma.DbNull,
+            createdAt: new Date(event.createdAt),
+            updatedAt: new Date(event.updatedAt),
+          },
+        });
+        return toShipmentWebhookEvent(row);
+      },
+      async markProcessed(id, processedAt, shipmentId, orderId) {
+        const result = await db.shipmentWebhookEvent.updateMany({
+          where: { id },
+          data: {
+            processedAt: new Date(processedAt),
+            updatedAt: new Date(processedAt),
+            ...(shipmentId ? { shipmentId } : {}),
+            ...(orderId ? { orderId } : {}),
+          },
+        });
+        if (result.count === 0) return null;
+        const row = await db.shipmentWebhookEvent.findUniqueOrThrow({ where: { id } });
+        return toShipmentWebhookEvent(row);
       },
     },
 

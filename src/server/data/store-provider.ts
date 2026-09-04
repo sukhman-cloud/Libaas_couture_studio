@@ -22,6 +22,9 @@ import type {
   PaymentAttempt,
   PaymentWebhookEvent,
   Product,
+  Shipment,
+  ShipmentActivity,
+  ShipmentWebhookEvent,
   User,
   Wishlist,
 } from "@/types/domain";
@@ -51,7 +54,7 @@ import { withLock } from "@/server/lock";
  */
 
 /** Bump when the persisted shape changes; add a step to `migrateStore`. */
-export const STORE_VERSION = 8;
+export const STORE_VERSION = 9;
 
 export interface DataStore {
   version: number;
@@ -77,6 +80,9 @@ export interface DataStore {
   paymentWebhookEvents: PaymentWebhookEvent[];
   customizationActivities: CustomizationActivity[];
   customizationNotes: CustomizationNote[];
+  shipments: Shipment[];
+  shipmentActivities: ShipmentActivity[];
+  shipmentWebhookEvents: ShipmentWebhookEvent[];
 }
 
 export function emptyStore(): DataStore {
@@ -104,6 +110,9 @@ export function emptyStore(): DataStore {
     paymentWebhookEvents: [],
     customizationActivities: [],
     customizationNotes: [],
+    shipments: [],
+    shipmentActivities: [],
+    shipmentWebhookEvents: [],
   };
 }
 
@@ -139,6 +148,9 @@ const STORE_COLLECTION_KEYS = [
   "paymentWebhookEvents",
   "customizationActivities",
   "customizationNotes",
+  "shipments",
+  "shipmentActivities",
+  "shipmentWebhookEvents",
 ] as const;
 
 export function migrateStore(raw: unknown): DataStore | null {
@@ -244,8 +256,12 @@ export function migrateStore(raw: unknown): DataStore | null {
 
   // v5 → v6: append-only order activity and private note collections.
   // v6 → v7: customization workflow activity and private notes.
-  // Nothing to convert — emptyStore() supplies both collections and all
-  // existing orders remain valid historical records.
+  // v7 → v8: payments, payment attempts, payment activities, payment
+  // webhook events (Phase 10 foundation).
+  // v8 → v9: shipments, shipment activities, shipment webhook events
+  // (Phase 11 foundation). Nothing to convert — emptyStore() supplies all
+  // three collections and every existing order remains a valid historical
+  // record with no shipment attached (read paths treat that honestly).
 
   store.version = STORE_VERSION;
   return store;
@@ -681,6 +697,93 @@ function buildStoreRepositories(
           event.processedAt = processedAt;
           event.updatedAt = processedAt;
           if (paymentId) event.paymentId = paymentId;
+          if (orderId) event.orderId = orderId;
+          return event;
+        });
+      },
+    },
+
+    shipments: {
+      async getById(id) {
+        return store.shipments.find((shipment) => shipment.id === id) ?? null;
+      },
+      async getByOrderId(orderId) {
+        return store.shipments.find((shipment) => shipment.orderId === orderId) ?? null;
+      },
+      async listByOrderIds(orderIds) {
+        const wanted = new Set(orderIds);
+        return store.shipments.filter((shipment) => wanted.has(shipment.orderId));
+      },
+      async create(shipment) {
+        return guard(async () => {
+          if (store.shipments.some((row) => row.orderId === shipment.orderId)) {
+            throw new Error(`Shipment already exists for order: ${shipment.orderId}`);
+          }
+          store.shipments.push(shipment);
+          await persistOrRollback(() => {
+            const index = store.shipments.lastIndexOf(shipment);
+            if (index !== -1) store.shipments.splice(index, 1);
+          });
+          return shipment;
+        });
+      },
+      async update(shipment) {
+        return replace(store.shipments, shipment, "Shipment");
+      },
+      async transitionStatus(shipmentId, expectedStatus, nextStatus, updatedAt) {
+        return guard(async () => {
+          const shipment = store.shipments.find((row) => row.id === shipmentId);
+          if (!shipment || shipment.status !== expectedStatus) return null;
+          shipment.status = nextStatus;
+          shipment.updatedAt = updatedAt;
+          return shipment;
+        });
+      },
+    },
+
+    shipmentActivities: {
+      async listByShipmentId(shipmentId) {
+        return store.shipmentActivities
+          .filter((activity) => activity.shipmentId === shipmentId)
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+      },
+      async create(activity) {
+        return insert(store.shipmentActivities, activity);
+      },
+    },
+
+    shipmentWebhookEvents: {
+      async getByProviderEvent(carrier, providerEventId) {
+        return (
+          store.shipmentWebhookEvents.find(
+            (event) => event.carrier === carrier && event.providerEventId === providerEventId,
+          ) ?? null
+        );
+      },
+      async create(event) {
+        return guard(async () => {
+          if (
+            store.shipmentWebhookEvents.some(
+              (row) => row.carrier === event.carrier && row.providerEventId === event.providerEventId,
+            )
+          ) {
+            throw new Error("Duplicate shipment webhook event.");
+          }
+          store.shipmentWebhookEvents.push(event);
+          await persistOrRollback(() => {
+            const index = store.shipmentWebhookEvents.lastIndexOf(event);
+            if (index !== -1) store.shipmentWebhookEvents.splice(index, 1);
+          });
+          return event;
+        });
+      },
+      async markProcessed(id, processedAt, shipmentId, orderId) {
+        return guard(async () => {
+          const event = store.shipmentWebhookEvents.find((row) => row.id === id);
+          if (!event) return null;
+          event.processedAt = processedAt;
+          event.updatedAt = processedAt;
+          if (shipmentId) event.shipmentId = shipmentId;
           if (orderId) event.orderId = orderId;
           return event;
         });

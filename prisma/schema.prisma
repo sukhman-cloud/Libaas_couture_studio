@@ -132,6 +132,32 @@ enum PaymentAttemptStatus {
   @@map("payment_attempt_status")
 }
 
+/// Fulfillment lifecycle — separate from order_status and payment_status.
+enum ShipmentStatus {
+  not_ready
+  preparing
+  ready_to_ship
+  shipped
+  out_for_delivery
+  delivered
+  delivery_failed
+  returned
+  cancelled
+
+  @@map("shipment_status")
+}
+
+/// Provider-agnostic method vocabulary; provider_managed is reserved for a
+/// future real carrier integration.
+enum ShipmentMethod {
+  standard
+  local_delivery
+  pickup
+  provider_managed
+
+  @@map("shipment_method")
+}
+
 // ── Identity ────────────────────────────────────────────────────────
 
 model User {
@@ -157,6 +183,7 @@ model User {
   customizationActivities CustomizationActivity[] @relation("CustomizationActivityActor")
   customizationNotes      CustomizationNote[]      @relation("CustomizationNoteAuthor")
   paymentActivities       PaymentActivity[]        @relation("PaymentActivityActor")
+  shipmentActivities      ShipmentActivity[]       @relation("ShipmentActivityActor")
 
   @@map("users")
 }
@@ -652,6 +679,7 @@ model Order {
   notes      OrderNote[]
   customizationRequests CustomizationRequest[] @relation("CustomizationOrder")
   payment    Payment?
+  shipment   Shipment?
 
   @@unique([userId, idempotencyKey])
   @@index([userId])
@@ -865,4 +893,77 @@ model PaymentWebhookEvent {
 
   @@unique([provider, providerEventId])
   @@map("payment_webhook_events")
+}
+
+// ── Shipping & fulfillment (Phase 11 foundation) ───────────────────
+
+/// One shipment per order — the order's fulfillment state, separate from
+/// OrderStatus and PaymentStatus. The delivery address is NEVER duplicated
+/// here: it lives exclusively on Order's shipFullName/shipLine1/etc.
+/// columns (an immutable snapshot already); every reader re-derives it
+/// from the order. No real carrier is integrated — carrier/tracking are
+/// admin-entered text, never a live provider lookup.
+model Shipment {
+  id      String @id
+  orderId String @unique @map("order_id")
+
+  status ShipmentStatus
+  method ShipmentMethod
+
+  carrier           String?
+  trackingNumber    String?   @map("tracking_number")
+  estimatedDelivery String?   @map("estimated_delivery")
+
+  shippedAt   DateTime? @map("shipped_at")
+  deliveredAt DateTime? @map("delivered_at")
+  cancelledAt DateTime? @map("cancelled_at")
+
+  metadata Json?
+
+  createdAt DateTime @map("created_at")
+  updatedAt DateTime @map("updated_at")
+
+  order      Order              @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  activities ShipmentActivity[]
+
+  @@map("shipments")
+}
+
+/// Append-only operational history for one Shipment — mirrors OrderActivity
+/// and PaymentActivity.
+model ShipmentActivity {
+  id          String          @id
+  shipmentId  String          @map("shipment_id")
+  orderId     String          @map("order_id")
+  type        String
+  actorUserId String?         @map("actor_user_id")
+  fromStatus  ShipmentStatus? @map("from_status")
+  toStatus    ShipmentStatus? @map("to_status")
+  metadata    Json?
+  createdAt   DateTime        @map("created_at")
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
+  actor    User?    @relation("ShipmentActivityActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([shipmentId, createdAt])
+  @@map("shipment_activities")
+}
+
+/// Webhook foundation only — no real carrier is connected yet.
+/// (carrier, providerEventId) is the future idempotency key.
+model ShipmentWebhookEvent {
+  id              String    @id
+  carrier         String
+  providerEventId String    @map("provider_event_id")
+  shipmentId      String?   @map("shipment_id")
+  orderId         String?   @map("order_id")
+  eventType       String    @map("event_type")
+  processedAt     DateTime? @map("processed_at")
+  metadata        Json?
+
+  createdAt DateTime @map("created_at")
+  updatedAt DateTime @map("updated_at")
+
+  @@unique([carrier, providerEventId])
+  @@map("shipment_webhook_events")
 }

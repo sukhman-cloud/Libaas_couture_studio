@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Scissors, Search, ShoppingBag } from "lucide-react";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
+import { PaymentStatusBadge } from "@/components/orders/payment-status-badge";
+import { ShippingStatusBadge } from "@/components/orders/shipping-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { buttonStyles } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -168,6 +170,7 @@ export default async function AdminOrdersPage({
                     <TH>Items</TH>
                     <TH>Total</TH>
                     <TH>Status</TH>
+                    <TH>Fulfillment</TH>
                   </TR>
                 </THead>
                 <TBody>
@@ -207,6 +210,16 @@ export default async function AdminOrdersPage({
                       </TD>
                       <TD>
                         <OrderStatusBadge status={order.status} />
+                      </TD>
+                      <TD className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <PaymentStatusBadge status={order.paymentStatus} />
+                          <ShippingStatusBadge status={order.shipmentStatus} />
+                        </div>
+                        <Caption className="mt-1 block">
+                          {order.hasTracking ? "Tracking added" : "No tracking"}
+                          {!order.fulfillmentReady && " · Blocked"}
+                        </Caption>
                       </TD>
                     </TR>
                   ))}

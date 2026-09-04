@@ -26,6 +26,10 @@ import type {
   PasswordResetToken,
   Product,
   ProductAvailability,
+  Shipment,
+  ShipmentActivity,
+  ShipmentStatus,
+  ShipmentWebhookEvent,
   User,
   Wishlist,
 } from "@/types/domain";
@@ -276,6 +280,31 @@ export interface PaymentWebhookEventRepository {
   markProcessed(id: ID, processedAt: string, paymentId?: ID, orderId?: ID): Promise<PaymentWebhookEvent | null>;
 }
 
+export interface ShipmentRepository {
+  getById(id: ID): Promise<Shipment | null>;
+  getByOrderId(orderId: ID): Promise<Shipment | null>;
+  listByOrderIds(orderIds: ID[]): Promise<Shipment[]>;
+  create(shipment: Shipment): Promise<Shipment>;
+  update(shipment: Shipment): Promise<Shipment>;
+  transitionStatus(
+    shipmentId: ID,
+    expectedStatus: ShipmentStatus,
+    nextStatus: ShipmentStatus,
+    updatedAt: string,
+  ): Promise<Shipment | null>;
+}
+
+export interface ShipmentActivityRepository {
+  listByShipmentId(shipmentId: ID): Promise<ShipmentActivity[]>;
+  create(activity: ShipmentActivity): Promise<ShipmentActivity>;
+}
+
+export interface ShipmentWebhookEventRepository {
+  getByProviderEvent(carrier: string, providerEventId: string): Promise<ShipmentWebhookEvent | null>;
+  create(event: ShipmentWebhookEvent): Promise<ShipmentWebhookEvent>;
+  markProcessed(id: ID, processedAt: string, shipmentId?: ID, orderId?: ID): Promise<ShipmentWebhookEvent | null>;
+}
+
 export interface AppointmentRepository {
   list(params?: ListParams): Promise<Appointment[]>;
   count(): Promise<number>;
@@ -394,6 +423,9 @@ export interface StoreRepositories {
   paymentAttempts: PaymentAttemptRepository;
   paymentActivities: PaymentActivityRepository;
   paymentWebhookEvents: PaymentWebhookEventRepository;
+  shipments: ShipmentRepository;
+  shipmentActivities: ShipmentActivityRepository;
+  shipmentWebhookEvents: ShipmentWebhookEventRepository;
 }
 
 export interface Repositories extends StoreRepositories {
