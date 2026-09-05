@@ -490,3 +490,75 @@ export async function getInstagramFeed(): Promise<InstagramFeedResult> {
     return { status: "error" };
   }
 }
+
+/* ── admin diagnostics ──────────────────────────────────────────── */
+
+export interface InstagramStatus {
+  /** Whether INSTAGRAM_ACCESS_TOKEN (and friends) are set and well-formed. */
+  configured: boolean;
+  /** The account id/handle the service reads, when configured ("me" by default). */
+  user?: string;
+  /** Cached feed state, when one exists (regardless of freshness). */
+  cache?: {
+    postCount: number;
+    fetchedAt: string;
+    /** True once the TTL has passed (a background refresh may be running). */
+    stale: boolean;
+    /** True once even the stale ceiling has passed (would no longer be served). */
+    expired: boolean;
+  };
+  /** True if the most recent fetch attempt failed and back-off is armed. */
+  lastFetchFailed: boolean;
+}
+
+/**
+ * Read-only snapshot for the admin UI — never triggers a fetch, never
+ * throws, never exposes the token. Reuses the same cache/back-off state
+ * `getInstagramFeed()` reads, so it always reflects reality exactly.
+ */
+export function getInstagramStatus(): InstagramStatus {
+  const config = resolveConfig();
+  const now = Date.now();
+  const cached = globalCache.__lcsInstagramFeed;
+
+  return {
+    configured: config !== null,
+    ...(config ? { user: config.user } : {}),
+    ...(cached
+      ? {
+          cache: {
+            postCount: cached.posts.length,
+            fetchedAt: cached.fetchedAt,
+            stale: now >= cached.expiresAt,
+            expired: now - cached.fetchedAtMs >= MAX_STALE_MS,
+          },
+        }
+      : {}),
+    lastFetchFailed: inBackoff(now),
+  };
+}
+
+/**
+ * Force an immediate refresh, bypassing the failure back-off — for an
+ * explicit admin action ("Refresh now") only. Never called by page
+ * rendering: every customer-facing path keeps using the passive,
+ * back-off-respecting `getInstagramFeed()` above so a manual retry can
+ * never turn into an accidental hammering loop.
+ */
+export async function refreshInstagramFeed(): Promise<
+  { ok: true; postCount: number } | { ok: false; error: string }
+> {
+  const config = resolveConfig();
+  if (!config) {
+    return { ok: false, error: "Instagram is not configured." };
+  }
+  try {
+    const posts = await startRefresh(config);
+    return { ok: true, postCount: posts.length };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Refresh failed.",
+    };
+  }
+}
