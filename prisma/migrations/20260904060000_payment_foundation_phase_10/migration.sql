@@ -4,6 +4,10 @@
 -- attempt/activity history, and a dedup-safe webhook event table for a
 -- future provider integration.
 
+CREATE TYPE "payment_provider" AS ENUM ('manual', 'cash_on_delivery', 'online_gateway');
+CREATE TYPE "payment_status" AS ENUM ('unpaid', 'pending', 'authorized', 'paid', 'failed', 'cancelled', 'refunded');
+CREATE TYPE "payment_attempt_status" AS ENUM ('pending', 'authorized', 'paid', 'failed', 'cancelled');
+
 CREATE TABLE "payments" (
   "id" TEXT NOT NULL,
   "order_id" TEXT NOT NULL,
