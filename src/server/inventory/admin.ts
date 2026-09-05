@@ -46,10 +46,6 @@ export async function getAdminInventoryDetailPage(
 
 export type InventoryActionResult = { ok: true } | { ok: false; error: string };
 
-function actorFor(sub: string): string | undefined {
-  return sub === "dev-admin" ? undefined : sub;
-}
-
 const MAX_MANUAL_QUANTITY = 100_000;
 
 export async function adjustAdminStock(input: {
@@ -76,7 +72,7 @@ export async function adjustAdminStock(input: {
     type: input.type,
     quantityChange: input.quantityChange,
     ...(input.reason ? { reason: input.reason } : {}),
-    ...(actorFor(auth.session.sub) ? { actorUserId: actorFor(auth.session.sub) } : {}),
+    actorUserId: auth.session.sub,
     ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
   });
   if (!result.ok) return { ok: false, error: result.error };

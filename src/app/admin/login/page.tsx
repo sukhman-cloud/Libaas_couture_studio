@@ -41,12 +41,18 @@ export default function AdminLoginPage() {
         <form action={formAction} className="space-y-4" noValidate>
           {state.error && <Alert tone="danger">{state.error}</Alert>}
           <Input
-            label="Admin password"
+            label="Email"
+            name="email"
+            type="email"
+            autoComplete="username"
+            required
+          />
+          <Input
+            label="Password"
             name="password"
             type="password"
             autoComplete="current-password"
             required
-            hint="Dev-only gate for Phase 1 — real admin accounts come later."
           />
           <Button type="submit" className="w-full" isLoading={isPending}>
             Sign in

@@ -366,7 +366,7 @@ export async function transitionAdminOrder(
         id: randomUUID(),
         orderId: order.id,
         type: nextStatus === "cancelled" ? "order_cancelled" : "status_changed",
-        actorUserId: auth.session.sub === "dev-admin" ? undefined : auth.session.sub,
+        actorUserId: auth.session.sub,
         fromStatus: order.status,
         toStatus: nextStatus as OrderStatus,
         createdAt: now,
@@ -377,11 +377,7 @@ export async function transitionAdminOrder(
       // commit without its stock coming back (or vice versa). Idempotent —
       // see releaseInventoryForOrder's doc comment.
       if (nextStatus === "cancelled") {
-        await releaseInventoryForOrder(
-          tx,
-          updated,
-          auth.session.sub === "dev-admin" ? undefined : auth.session.sub,
-        );
+        await releaseInventoryForOrder(tx, updated, auth.session.sub);
       }
     });
     return { ok: true, status: nextStatus as OrderStatus };
@@ -414,7 +410,7 @@ export async function addAdminOrderNote(
       await tx.orderNotes.create({
         id: randomUUID(),
         orderId: order.id,
-        authorUserId: auth.session.sub === "dev-admin" ? undefined : auth.session.sub,
+        authorUserId: auth.session.sub,
         authorName: "Studio admin",
         body: noteBody,
         createdAt: now,
@@ -423,7 +419,7 @@ export async function addAdminOrderNote(
         id: randomUUID(),
         orderId: order.id,
         type: "internal_note_added",
-        actorUserId: auth.session.sub === "dev-admin" ? undefined : auth.session.sub,
+        actorUserId: auth.session.sub,
         metadata: { characters: noteBody.length },
         createdAt: now,
       });
@@ -455,7 +451,7 @@ export async function recordAdminManualPayment(
 
   const result = await recordManualPayment({
     orderId: order.id,
-    ...(auth.session.sub === "dev-admin" ? {} : { actorUserId: auth.session.sub }),
+    actorUserId: auth.session.sub,
   });
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
@@ -467,10 +463,6 @@ const SHIPMENT_METHODS: ShipmentMethod[] = ["standard", "local_delivery", "picku
 export const ADMIN_CARRIER_MAX = 80;
 export const ADMIN_TRACKING_MAX = 100;
 export const ADMIN_ESTIMATED_DELIVERY_MAX = 80;
-
-function actorFor(sub: string): string | undefined {
-  return sub === "dev-admin" ? undefined : sub;
-}
 
 /** Admin-only shipment creation. Idempotent — calling it again on an order
  *  that already has a shipment is a safe no-op that returns success. */
@@ -491,7 +483,7 @@ export async function createAdminShipment(
   const result = await createShipment({
     orderId: order.id,
     method: method as ShipmentMethod,
-    ...(actorFor(auth.session.sub) ? { actorUserId: actorFor(auth.session.sub) } : {}),
+    actorUserId: auth.session.sub,
   });
   if (result.outcome === "rejected" || result.outcome === "failed") {
     return { ok: false, error: result.message };
@@ -517,7 +509,7 @@ export async function transitionAdminShipment(
   const result = await transitionShipment({
     orderId: order.id,
     nextStatus: nextStatus as ShipmentStatus,
-    ...(actorFor(auth.session.sub) ? { actorUserId: actorFor(auth.session.sub) } : {}),
+    actorUserId: auth.session.sub,
   });
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
@@ -539,7 +531,7 @@ export async function updateAdminShipmentTracking(
   const result = await updateShipmentTracking({
     orderId: order.id,
     ...fields,
-    ...(actorFor(auth.session.sub) ? { actorUserId: actorFor(auth.session.sub) } : {}),
+    actorUserId: auth.session.sub,
   });
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };

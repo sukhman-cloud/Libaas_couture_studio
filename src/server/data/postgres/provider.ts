@@ -18,6 +18,7 @@ import {
 import { getPrismaClient } from "@/server/data/postgres/client";
 import {
   addressRows,
+  adminUserColumns,
   CART_INCLUDE,
   ORDER_INCLUDE,
   orderColumns,
@@ -43,6 +44,7 @@ import {
   profileColumns,
   resetTokenColumns,
   secondaryCategoryRows,
+  toAdminUser,
   toCart,
   toCategory,
   toCollection,
@@ -55,6 +57,7 @@ import {
   toMediaAsset,
   toProduct,
   toResetToken,
+  toRole,
   toUser,
   toWishlist,
   userColumns,
@@ -1057,6 +1060,54 @@ function buildPostgresRepositories(db: Db): StoreRepositories {
           where: { id: credential.id },
         });
         return toCredential(row);
+      },
+    },
+
+    roles: {
+      async list() {
+        const rows = await db.role.findMany();
+        return rows.map(toRole);
+      },
+      async getById(id) {
+        const row = await db.role.findUnique({ where: { id } });
+        return row ? toRole(row) : null;
+      },
+      async getByName(name) {
+        const row = await db.role.findUnique({ where: { name } });
+        return row ? toRole(row) : null;
+      },
+    },
+
+    adminUsers: {
+      async getByUserId(userId) {
+        const row = await db.adminUser.findUnique({ where: { userId } });
+        return row ? toAdminUser(row) : null;
+      },
+      async list() {
+        const rows = await db.adminUser.findMany();
+        return rows.map(toAdminUser);
+      },
+      async count() {
+        return db.adminUser.count();
+      },
+      async create(adminUser) {
+        return toAdminUser(
+          await db.adminUser.create({
+            data: { id: adminUser.id, ...adminUserColumns(adminUser) },
+          }),
+        );
+      },
+      async update(adminUser) {
+        return toAdminUser(
+          await orNotFound(
+            db.adminUser.update({
+              where: { id: adminUser.id },
+              data: adminUserColumns(adminUser),
+            }),
+            "Admin user",
+            adminUser.id,
+          ),
+        );
       },
     },
 

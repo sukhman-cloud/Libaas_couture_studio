@@ -1,5 +1,6 @@
 import "server-only";
 import type {
+  AdminUser,
   Appointment,
   AuthCredential,
   Cart,
@@ -28,6 +29,8 @@ import type {
   PasswordResetToken,
   Product,
   ProductAvailability,
+  Role,
+  RoleName,
   Shipment,
   ShipmentActivity,
   ShipmentStatus,
@@ -442,6 +445,36 @@ export interface PasswordResetTokenRepository {
   markUsed(id: ID): Promise<void>;
 }
 
+/* ── Admin accounts (Phase 14) ───────────────────────────────────── */
+
+/**
+ * Fixed, seeded reference rows — never created or edited through the
+ * application. `list`/`getByName` exist purely for lookups when
+ * provisioning an admin account.
+ */
+export interface RoleRepository {
+  list(): Promise<Role[]>;
+  getById(id: ID): Promise<Role | null>;
+  getByName(name: RoleName): Promise<Role | null>;
+}
+
+/**
+ * The privileged-identity marker. A `User` (kind admin) is a real,
+ * usable admin ONLY once it has a row here — this is the single write
+ * a self-promotion attack would need, and it is never reachable from a
+ * public/customer-facing code path (see docs for the provisioning flow).
+ */
+export interface AdminUserRepository {
+  getByUserId(userId: ID): Promise<AdminUser | null>;
+  /** Every admin account — the staff management page's roster. */
+  list(): Promise<AdminUser[]>;
+  /** Whether ANY admin account exists yet — the bootstrap script's guard. */
+  count(): Promise<number>;
+  create(adminUser: AdminUser): Promise<AdminUser>;
+  /** Role reassignment — replaces the existing row for that user. */
+  update(adminUser: AdminUser): Promise<AdminUser>;
+}
+
 /* ── Customization foundation (Phase 7B) ────────────────────────── */
 
 export interface CustomizationRequestRepository {
@@ -478,6 +511,8 @@ export interface StoreRepositories {
   appointments: AppointmentRepository;
   users: UserRepository;
   credentials: CredentialRepository;
+  roles: RoleRepository;
+  adminUsers: AdminUserRepository;
   customers: CustomerProfileRepository;
   measurementProfiles: MeasurementProfileRepository;
   passwordResetTokens: PasswordResetTokenRepository;

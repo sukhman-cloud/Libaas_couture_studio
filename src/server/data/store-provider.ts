@@ -1,5 +1,6 @@
 import "server-only";
 import type {
+  AdminUser,
   Appointment,
   AuthCredential,
   Cart,
@@ -24,6 +25,8 @@ import type {
   PaymentAttempt,
   PaymentWebhookEvent,
   Product,
+  Role,
+  RoleName,
   Shipment,
   ShipmentActivity,
   ShipmentWebhookEvent,
@@ -48,6 +51,7 @@ import {
   sortProducts,
 } from "@/server/data/catalog-logic";
 import { withLock } from "@/server/lock";
+import { rolePermissions } from "@/lib/auth/roles";
 
 /**
  * Store-backed repositories shared by the memory and file providers.
@@ -56,7 +60,29 @@ import { withLock } from "@/server/lock";
  */
 
 /** Bump when the persisted shape changes; add a step to `migrateStore`. */
-export const STORE_VERSION = 10;
+export const STORE_VERSION = 11;
+
+/**
+ * Fixed reference rows — identical ids/permissions to the Postgres
+ * migration's seed data (prisma/migrations/*_admin_accounts_phase_14), so
+ * an admin's role assignment means the same thing under either provider.
+ */
+function seedRoles(): Role[] {
+  const now = new Date(0).toISOString();
+  const ids: Record<RoleName, string> = {
+    owner: "role-owner",
+    manager: "role-manager",
+    tailor: "role-tailor",
+    staff: "role-staff",
+  };
+  return (Object.keys(rolePermissions) as RoleName[]).map((name) => ({
+    id: ids[name],
+    name,
+    permissions: [...rolePermissions[name]],
+    createdAt: now,
+    updatedAt: now,
+  }));
+}
 
 export interface DataStore {
   version: number;
@@ -68,6 +94,8 @@ export interface DataStore {
   appointments: Appointment[];
   users: User[];
   credentials: AuthCredential[];
+  roles: Role[];
+  adminUsers: AdminUser[];
   customerProfiles: CustomerProfile[];
   measurementProfiles: MeasurementProfile[];
   passwordResetTokens: PasswordResetToken[];
@@ -100,6 +128,8 @@ export function emptyStore(): DataStore {
     appointments: [],
     users: [],
     credentials: [],
+    roles: seedRoles(),
+    adminUsers: [],
     customerProfiles: [],
     measurementProfiles: [],
     passwordResetTokens: [],
@@ -140,6 +170,8 @@ const STORE_COLLECTION_KEYS = [
   "appointments",
   "users",
   "credentials",
+  "roles",
+  "adminUsers",
   "customerProfiles",
   "measurementProfiles",
   "passwordResetTokens",
@@ -275,6 +307,12 @@ export function migrateStore(raw: unknown): DataStore | null {
   // every existing product simply has NO inventory row, which reads as
   // trackingEnabled: false (availability governed by the existing
   // ProductAvailability enum alone, unchanged from before this phase).
+  // v10 → v11: real admin accounts (Phase 14). `roles` did not exist in any
+  // older file, so the key is absent (not merely empty) on `raw` and the
+  // FIRST spread's seeded roles survive untouched — no legacy row to carry
+  // over. `adminUsers` starts empty for every upgraded store: an operator
+  // must run the bootstrap script once to create the first owner, exactly
+  // like a brand-new store would.
 
   store.version = STORE_VERSION;
   return store;
@@ -988,6 +1026,36 @@ function buildStoreRepositories(
             }
           },
         );
+      },
+    },
+
+    roles: {
+      async list() {
+        return [...store.roles];
+      },
+      async getById(id) {
+        return store.roles.find((r) => r.id === id) ?? null;
+      },
+      async getByName(name) {
+        return store.roles.find((r) => r.name === name) ?? null;
+      },
+    },
+
+    adminUsers: {
+      async getByUserId(userId) {
+        return store.adminUsers.find((a) => a.userId === userId) ?? null;
+      },
+      async list() {
+        return [...store.adminUsers];
+      },
+      async count() {
+        return store.adminUsers.length;
+      },
+      async create(adminUser) {
+        return insert(store.adminUsers, adminUser);
+      },
+      async update(adminUser) {
+        return replace(store.adminUsers, adminUser, "Admin user");
       },
     },
 

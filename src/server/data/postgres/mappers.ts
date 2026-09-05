@@ -1,6 +1,7 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
 import type {
+  AdminUser,
   AuthCredential,
   Cart,
   CartItem,
@@ -27,6 +28,8 @@ import type {
   Product,
   ProductAttributes,
   ProductMedia,
+  Role,
+  RoleName,
   Shipment,
   ShipmentActivity,
   ShipmentWebhookEvent,
@@ -187,6 +190,28 @@ export function toCredential(
     userId: row.userId,
     passwordHash: row.passwordHash,
     sessionVersion: row.sessionVersion,
+    createdAt: iso(row.createdAt),
+    updatedAt: iso(row.updatedAt),
+  };
+}
+
+export function toRole(row: Prisma.RoleGetPayload<object>): Role {
+  return {
+    id: row.id,
+    // Seeded, closed vocabulary — the migration guarantees `name` is
+    // always one of RoleName; never guessed at or validated here.
+    name: row.name as RoleName,
+    permissions: row.permissions as Role["permissions"],
+  };
+}
+
+export function toAdminUser(
+  row: Prisma.AdminUserGetPayload<object>,
+): AdminUser {
+  return {
+    id: row.id,
+    userId: row.userId,
+    roleId: row.roleId,
     createdAt: iso(row.createdAt),
     updatedAt: iso(row.updatedAt),
   };
@@ -619,6 +644,15 @@ export function credentialColumns(credential: AuthCredential) {
     sessionVersion: credential.sessionVersion,
     createdAt: new Date(credential.createdAt),
     updatedAt: new Date(credential.updatedAt),
+  };
+}
+
+export function adminUserColumns(adminUser: AdminUser) {
+  return {
+    userId: adminUser.userId,
+    roleId: adminUser.roleId,
+    createdAt: new Date(adminUser.createdAt),
+    updatedAt: new Date(adminUser.updatedAt),
   };
 }
 

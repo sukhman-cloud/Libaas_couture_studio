@@ -73,7 +73,7 @@ export async function transitionCustomization(id: string, next: string): Promise
       const updated = await tx.customizationRequests.transitionStatus(id, request.status, next as CustomizationStatus, now);
       if (!updated) throw new Error("This request changed. Refresh and try again.");
       const event = next === "approved" ? "request_approved" : next === "rejected" ? "request_rejected" : next === "completed" ? "request_completed" : "status_changed";
-      await tx.customizationActivities.create({ id: randomUUID(), customizationRequestId: id, type: event, actorUserId: auth.session.sub === "dev-admin" ? undefined : auth.session.sub, fromStatus: request.status, toStatus: next as CustomizationStatus, createdAt: now });
+      await tx.customizationActivities.create({ id: randomUUID(), customizationRequestId: id, type: event, actorUserId: auth.session.sub, fromStatus: request.status, toStatus: next as CustomizationStatus, createdAt: now });
     });
     return { ok: true, status: next as CustomizationStatus };
   } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Could not update the request." }; }
@@ -89,7 +89,7 @@ export async function addCustomizationNote(id: string, body: string): Promise<Cu
       const request = await tx.customizationRequests.getById(id);
       if (!request) throw new Error("Request not found.");
       const now = new Date().toISOString();
-      await tx.customizationNotes.create({ id: randomUUID(), customizationRequestId: id, authorUserId: auth.session.sub === "dev-admin" ? undefined : auth.session.sub, authorName: "Studio admin", body: clean, createdAt: now });
+      await tx.customizationNotes.create({ id: randomUUID(), customizationRequestId: id, authorUserId: auth.session.sub, authorName: "Studio admin", body: clean, createdAt: now });
       await tx.customizationActivities.create({ id: randomUUID(), customizationRequestId: id, type: "internal_note_added", createdAt: now });
     });
     return { ok: true };

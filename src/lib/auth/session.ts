@@ -1,83 +1,94 @@
 import "server-only";
-import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { z } from "zod";
-import { env } from "@/lib/env";
 import {
   ADMIN_SESSION_COOKIE,
   ADMIN_SESSION_MAX_AGE,
 } from "@/lib/auth/constants";
+import { createSignedToken, verifySignedToken } from "@/lib/auth/signed-token";
+import { getRepositories } from "@/server/data";
+import type { RoleName } from "@/types/domain";
 
 /**
- * Phase 1 session foundation: a stateless, HMAC-signed cookie of the form
- * `<payload>.<signature>` where payload is base64url JSON.
+ * Phase 14: real admin accounts. The session cookie carries only an
+ * opaque, signed pointer (the admin User id); the role it reports is
+ * ALWAYS re-derived server-side from the current AdminUser + Role rows on
+ * every read — never trusted from the token payload itself, so a role
+ * change or account removal takes effect on the very next request rather
+ * than waiting for the token to expire.
  *
- * Later phases can swap this for database-backed sessions or an auth
- * library without changing callers — keep using `getAdminSession()`.
+ * This mirrors src/lib/auth/customer-session.ts exactly (same signed-token
+ * helper, same sessionVersion re-check so a password change or
+ * deactivation invalidates every previously issued session).
  */
 
-const sessionSchema = z.object({
-  /** Placeholder subject until real admin accounts exist. */
-  sub: z.literal("dev-admin"),
-  role: z.literal("owner"),
+const sessionTokenSchema = z.object({
+  kind: z.literal("admin"),
+  /** The admin User's id — the only trusted identity in the token. */
+  sub: z.string().min(1),
+  /** Session version minted with; must match the stored credential. */
+  ver: z.number().int(),
   issuedAt: z.number(),
   expiresAt: z.number(),
 });
 
-export type AdminSession = z.infer<typeof sessionSchema>;
-
-function getSecret(): string | null {
-  return env.SESSION_SECRET ?? null;
+/** The verified, current session — role is fresh from the database, never
+ *  from the token, so it can never be stale or forged. */
+export interface AdminSession {
+  sub: string;
+  role: RoleName;
+  issuedAt: number;
+  expiresAt: number;
 }
 
-function sign(payload: string, secret: string): string {
-  return createHmac("sha256", secret).update(payload).digest("base64url");
-}
-
-export function createSessionToken(): string | null {
-  const secret = getSecret();
-  if (!secret) return null;
+export function createSessionToken(
+  userId: string,
+  sessionVersion: number,
+): string | null {
   const now = Date.now();
-  const session: AdminSession = {
-    sub: "dev-admin",
-    role: "owner",
+  return createSignedToken({
+    kind: "admin",
+    sub: userId,
+    ver: sessionVersion,
     issuedAt: now,
     expiresAt: now + ADMIN_SESSION_MAX_AGE * 1000,
-  };
-  const payload = Buffer.from(JSON.stringify(session)).toString("base64url");
-  return `${payload}.${sign(payload, secret)}`;
+  } satisfies z.infer<typeof sessionTokenSchema>);
 }
 
-export function verifySessionToken(token: string): AdminSession | null {
-  const secret = getSecret();
-  if (!secret) return null;
-
-  const parts = token.split(".");
-  if (parts.length !== 2) return null;
-  const [payload, signature] = parts;
-  if (!payload || !signature) return null;
-
-  const expected = sign(payload, secret);
-  const a = Buffer.from(signature);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-
-  try {
-    const parsed = sessionSchema.safeParse(
-      JSON.parse(Buffer.from(payload, "base64url").toString("utf8")),
-    );
-    if (!parsed.success) return null;
-    if (parsed.data.expiresAt < Date.now()) return null;
-    return parsed.data;
-  } catch {
-    return null;
-  }
-}
-
-/** Read and verify the admin session from cookies (server-side truth). */
+/**
+ * Full server-side session check: valid signature, unexpired, the user is
+ * still an active admin, the session version matches the stored
+ * credential (password change / deactivation invalidates old sessions),
+ * and — the admin-specific step — an AdminUser row and its Role still
+ * exist. Losing the AdminUser row (revoked access) invalidates the
+ * session immediately, without waiting for the token to expire.
+ */
 export async function getAdminSession(): Promise<AdminSession | null> {
   const store = await cookies();
   const token = store.get(ADMIN_SESSION_COOKIE)?.value;
   if (!token) return null;
-  return verifySessionToken(token);
+
+  const payload = verifySignedToken(token, sessionTokenSchema);
+  if (!payload) return null;
+  if (payload.expiresAt < Date.now()) return null;
+
+  const repos = getRepositories();
+  const user = await repos.users.getById(payload.sub);
+  if (!user || user.kind !== "admin" || !user.isActive) return null;
+
+  const credential = await repos.credentials.getByUserId(user.id);
+  if (!credential || credential.sessionVersion !== payload.ver) return null;
+
+  const adminUser = await repos.adminUsers.getByUserId(user.id);
+  if (!adminUser) return null;
+
+  const role = await repos.roles.getById(adminUser.roleId);
+  if (!role) return null;
+
+  return {
+    sub: user.id,
+    role: role.name,
+    issuedAt: payload.issuedAt,
+    expiresAt: payload.expiresAt,
+  };
 }

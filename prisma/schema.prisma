@@ -184,21 +184,22 @@ model User {
   createdAt DateTime @map("created_at")
   updatedAt DateTime @map("updated_at")
 
-  credential            AuthCredential?
-  profile               CustomerProfile?
-  passwordResetTokens   PasswordResetToken[]
-  measurementProfiles   MeasurementProfile[]
-  cart                  Cart?
-  wishlist              Wishlist?
-  orders                Order[]
-  customizationRequests CustomizationRequest[]
-  orderActivities       OrderActivity[]        @relation("OrderActivityActor")
-  orderNotes            OrderNote[]            @relation("OrderNoteAuthor")
+  credential              AuthCredential?
+  profile                 CustomerProfile?
+  adminUser               AdminUser?
+  passwordResetTokens     PasswordResetToken[]
+  measurementProfiles     MeasurementProfile[]
+  cart                    Cart?
+  wishlist                Wishlist?
+  orders                  Order[]
+  customizationRequests   CustomizationRequest[]
+  orderActivities         OrderActivity[]         @relation("OrderActivityActor")
+  orderNotes              OrderNote[]             @relation("OrderNoteAuthor")
   customizationActivities CustomizationActivity[] @relation("CustomizationActivityActor")
-  customizationNotes      CustomizationNote[]      @relation("CustomizationNoteAuthor")
-  paymentActivities       PaymentActivity[]        @relation("PaymentActivityActor")
-  shipmentActivities      ShipmentActivity[]       @relation("ShipmentActivityActor")
-  inventoryMovements      InventoryMovement[]      @relation("InventoryMovementActor")
+  customizationNotes      CustomizationNote[]     @relation("CustomizationNoteAuthor")
+  paymentActivities       PaymentActivity[]       @relation("PaymentActivityActor")
+  shipmentActivities      ShipmentActivity[]      @relation("ShipmentActivityActor")
+  inventoryMovements      InventoryMovement[]     @relation("InventoryMovementActor")
 
   @@map("users")
 }
@@ -236,6 +237,43 @@ model PasswordResetToken {
 
   @@index([userId])
   @@map("password_reset_tokens")
+}
+
+/// Fixed, small vocabulary of admin roles — matches RoleName in
+/// src/types/domain.ts exactly. Rows are seeded by the migration, never
+/// created through the application; `permissions` is the same closed
+/// Permission-literal vocabulary as src/lib/auth/roles.ts, kept here as
+/// TEXT[] so a permission rename is a data migration, not a schema one.
+model Role {
+  id          String   @id
+  name        String   @unique
+  permissions String[]
+  createdAt   DateTime @map("created_at")
+  updatedAt   DateTime @map("updated_at")
+
+  adminUsers AdminUser[]
+
+  @@map("roles")
+}
+
+/// Privileged-identity marker: a User (kind = admin) becomes a real admin
+/// ONLY by having a row here. This table is the single source of truth an
+/// attacker would have to write to in order to self-promote — it is never
+/// writable from a public/customer-facing code path (see
+/// docs/phase-*-admin-accounts.md for the provisioning flow). One admin
+/// role per user; role changes replace this row rather than accumulate.
+model AdminUser {
+  id        String   @id
+  userId    String   @unique @map("user_id")
+  roleId    String   @map("role_id")
+  createdAt DateTime @map("created_at")
+  updatedAt DateTime @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@index([roleId])
+  @@map("admin_users")
 }
 
 // ── Customer ────────────────────────────────────────────────────────
@@ -363,13 +401,13 @@ model CustomizationRequest {
   createdAt DateTime            @map("created_at")
   updatedAt DateTime            @map("updated_at")
 
-  user               User                @relation(fields: [userId], references: [id], onDelete: Restrict)
-  product            Product?            @relation(fields: [productId], references: [id], onDelete: Restrict)
-  measurementProfile MeasurementProfile? @relation(fields: [measurementProfileId], references: [id], onDelete: Restrict)
-  order             Order?             @relation("CustomizationOrder", fields: [orderId], references: [id], onDelete: Restrict)
-  orderItem         OrderItem?         @relation("CustomizationOrderItem", fields: [orderItemId], references: [id], onDelete: Restrict)
-  activities        CustomizationActivity[]
-  notes             CustomizationNote[]
+  user               User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  product            Product?                @relation(fields: [productId], references: [id], onDelete: Restrict)
+  measurementProfile MeasurementProfile?     @relation(fields: [measurementProfileId], references: [id], onDelete: Restrict)
+  order              Order?                  @relation("CustomizationOrder", fields: [orderId], references: [id], onDelete: Restrict)
+  orderItem          OrderItem?              @relation("CustomizationOrderItem", fields: [orderItemId], references: [id], onDelete: Restrict)
+  activities         CustomizationActivity[]
+  notes              CustomizationNote[]
 
   @@index([userId])
   @@index([orderId])
@@ -689,13 +727,13 @@ model Order {
   createdAt DateTime @map("created_at")
   updatedAt DateTime @map("updated_at")
 
-  user       User            @relation(fields: [userId], references: [id], onDelete: Restrict)
-  items      OrderItem[]
-  activities OrderActivity[]
-  notes      OrderNote[]
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  items                 OrderItem[]
+  activities            OrderActivity[]
+  notes                 OrderNote[]
   customizationRequests CustomizationRequest[] @relation("CustomizationOrder")
-  payment    Payment?
-  shipment   Shipment?
+  payment               Payment?
+  shipment              Shipment?
 
   @@unique([userId, idempotencyKey])
   @@index([userId])
@@ -729,8 +767,8 @@ model OrderItem {
   /// Original position in the order's line array — preserves order.
   position Int
 
-  order   Order   @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  order                 Order                  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  product               Product                @relation(fields: [productId], references: [id], onDelete: Restrict)
   customizationRequests CustomizationRequest[] @relation("CustomizationOrderItem")
 
   @@index([orderId])
@@ -774,16 +812,16 @@ model OrderNote {
 }
 
 model CustomizationActivity {
-  id                     String             @id
-  customizationRequestId String             @map("customization_request_id")
+  id                     String               @id
+  customizationRequestId String               @map("customization_request_id")
   type                   String
-  actorUserId            String?            @map("actor_user_id")
+  actorUserId            String?              @map("actor_user_id")
   fromStatus             CustomizationStatus? @map("from_status")
   toStatus               CustomizationStatus? @map("to_status")
-  createdAt              DateTime           @map("created_at")
+  createdAt              DateTime             @map("created_at")
 
   request CustomizationRequest @relation(fields: [customizationRequestId], references: [id], onDelete: Restrict)
-  actor   User? @relation("CustomizationActivityActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  actor   User?                @relation("CustomizationActivityActor", fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@index([customizationRequestId, createdAt])
   @@map("customization_activities")
@@ -792,13 +830,13 @@ model CustomizationActivity {
 model CustomizationNote {
   id                     String   @id
   customizationRequestId String   @map("customization_request_id")
-  authorUserId            String?  @map("author_user_id")
-  authorName              String   @map("author_name")
-  body                    String
-  createdAt               DateTime @map("created_at")
+  authorUserId           String?  @map("author_user_id")
+  authorName             String   @map("author_name")
+  body                   String
+  createdAt              DateTime @map("created_at")
 
   request CustomizationRequest @relation(fields: [customizationRequestId], references: [id], onDelete: Restrict)
-  author  User? @relation("CustomizationNoteAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+  author  User?                @relation("CustomizationNoteAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
 
   @@index([customizationRequestId, createdAt])
   @@map("customization_notes")
@@ -831,8 +869,8 @@ model Payment {
   createdAt DateTime @map("created_at")
   updatedAt DateTime @map("updated_at")
 
-  order     Order              @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  attempts  PaymentAttempt[]
+  order      Order             @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  attempts   PaymentAttempt[]
   activities PaymentActivity[]
 
   @@map("payments")
@@ -927,8 +965,8 @@ model Shipment {
   method ShipmentMethod
 
   carrier           String?
-  trackingNumber    String?   @map("tracking_number")
-  estimatedDelivery String?   @map("estimated_delivery")
+  trackingNumber    String? @map("tracking_number")
+  estimatedDelivery String? @map("estimated_delivery")
 
   shippedAt   DateTime? @map("shipped_at")
   deliveredAt DateTime? @map("delivered_at")
@@ -997,13 +1035,13 @@ model ShipmentWebhookEvent {
 /// for every product created before this phase) behaves exactly as
 /// before: purchasability is governed solely by Product.availability.
 model InventoryItem {
-  id        String  @id
-  productId String  @unique @map("product_id")
+  id        String @id
+  productId String @unique @map("product_id")
 
-  trackingEnabled  Boolean @map("tracking_enabled")
-  quantityOnHand   Int     @map("quantity_on_hand")
-  quantityReserved Int     @map("quantity_reserved")
-  lowStockThreshold Int    @map("low_stock_threshold")
+  trackingEnabled   Boolean @map("tracking_enabled")
+  quantityOnHand    Int     @map("quantity_on_hand")
+  quantityReserved  Int     @map("quantity_reserved")
+  lowStockThreshold Int     @map("low_stock_threshold")
 
   createdAt DateTime @map("created_at")
   updatedAt DateTime @map("updated_at")

@@ -1,16 +1,20 @@
 import type { Metadata } from "next";
-import { ShieldCheck } from "lucide-react";
-import { AdminSectionPlaceholder } from "@/components/admin/section-placeholder";
+import { StaffManager } from "@/components/admin/staff-manager";
+import { PageHeader } from "@/components/ui/page-header";
+import { listAdminAccounts } from "@/server/staff/admin";
 
 export const metadata: Metadata = { title: "Admin · Staff" };
 
-export default function AdminStaffPage() {
+export default async function AdminStaffPage() {
+  const accounts = await listAdminAccounts();
+
   return (
-    <AdminSectionPlaceholder
-      icon={ShieldCheck}
-      title="Staff"
-      phase="a later phase"
-      description="Staff accounts, roles and permissions will be managed here."
-    />
+    <div>
+      <PageHeader
+        title="Staff"
+        description="Everyone with access to this admin, and their role."
+      />
+      <StaffManager accounts={accounts} />
+    </div>
   );
 }

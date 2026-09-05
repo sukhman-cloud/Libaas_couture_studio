@@ -21,9 +21,16 @@ const envSchema = z.object({
     emptyAsUndefined,
     z.string().min(16).optional(),
   ),
-  ADMIN_DEV_PASSWORD: z.preprocess(
+  /**
+   * Gates scripts/bootstrap-admin.mjs — the ONLY way the first owner
+   * account is ever created. Never read by any web-facing code path.
+   * Unset ⇒ the bootstrap script refuses to run. Rotate/unset it once the
+   * first owner exists; it is not needed again unless every admin account
+   * is somehow lost.
+   */
+  ADMIN_BOOTSTRAP_SECRET: z.preprocess(
     emptyAsUndefined,
-    z.string().min(8).optional(),
+    z.string().min(16).optional(),
   ),
   DATA_PROVIDER: z.preprocess(
     emptyAsUndefined,
