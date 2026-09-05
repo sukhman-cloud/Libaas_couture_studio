@@ -1,4 +1,4 @@
-import type { HTMLAttributes, TdHTMLAttributes, ThHTMLAttributes } from "react";
+import type { HTMLAttributes, ReactNode, TdHTMLAttributes, ThHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -78,4 +78,50 @@ export function TD({
   ...props
 }: TdHTMLAttributes<HTMLTableCellElement>) {
   return <td className={cn("px-4 py-3 text-ink", className)} {...props} />;
+}
+
+/**
+ * Mobile card list that stands in for a `<Table>` below `sm`. Pair it with
+ * a `<Table>` wrapped in `hidden sm:block` so dense admin lists render as
+ * touch-friendly stacked cards on phones and a scannable table from `sm` up,
+ * instead of forcing horizontal scroll on the smallest screens.
+ */
+export function RowCardList({
+  className,
+  ...props
+}: HTMLAttributes<HTMLUListElement>) {
+  return <ul className={cn("space-y-3 sm:hidden", className)} {...props} />;
+}
+
+export function RowCard({
+  className,
+  ...props
+}: HTMLAttributes<HTMLLIElement>) {
+  return (
+    <li
+      className={cn(
+        "rounded-2xl border border-cream-200 bg-surface p-4 shadow-sm",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+/** Label/value row inside a `RowCard` — mirrors a table row's two cells. */
+export function RowCardField({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex items-start justify-between gap-3 py-1 text-sm", className)}>
+      <span className="shrink-0 text-muted">{label}</span>
+      <span className="min-w-0 text-right text-ink">{children}</span>
+    </div>
+  );
 }

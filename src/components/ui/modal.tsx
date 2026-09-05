@@ -20,6 +20,10 @@ export interface ModalProps {
 /**
  * Modal on the native <dialog> element: focus trapping, Escape-to-close
  * and inert background come from the platform.
+ *
+ * IMPORTANT: never add a display utility (flex/grid/…) to the <dialog>
+ * itself — it would override the UA's `dialog:not([open]) { display: none }`
+ * and make the closed modal visible. Layout lives on the inner wrapper.
  */
 export function Modal({
   open,
@@ -67,31 +71,40 @@ export function Modal({
       }}
       aria-label={title}
       className={cn(
-        "m-auto w-[calc(100vw-2rem)] max-w-lg rounded-2xl bg-surface p-0 shadow-2xl backdrop:bg-navy-950/60 backdrop:backdrop-blur-sm",
+        // Mobile: bottom sheet — full-width, pinned to the viewport bottom,
+        // rounded top corners only, capped height with internal scroll.
+        // sm+: reverts to a centered dialog with rounded corners all round.
+        "m-0 mt-auto max-h-[85vh] w-full max-w-full rounded-t-2xl rounded-b-none bg-surface p-0 shadow-2xl backdrop:bg-navy-950/60 backdrop:backdrop-blur-sm sm:m-auto sm:max-h-[80vh] sm:w-[calc(100vw-2rem)] sm:max-w-lg sm:rounded-2xl",
         className,
       )}
     >
-      <div className="flex items-start justify-between gap-4 border-b border-cream-200 px-5 py-4 sm:px-6">
-        <div>
-          <Heading level={3} className="text-lg sm:text-xl">
-            {title}
-          </Heading>
-          {description && (
-            <p className="mt-1 text-sm text-muted">{description}</p>
-          )}
+      <div className="flex max-h-[85vh] flex-col sm:max-h-[80vh]">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-cream-200 px-5 py-4 sm:px-6">
+          <div className="min-w-0">
+            <Heading level={3} className="text-lg sm:text-xl">
+              {title}
+            </Heading>
+            {description && (
+              <p className="mt-1 text-sm text-muted">{description}</p>
+            )}
+          </div>
+          <IconButton label="Close" variant="ghost" size="sm" onClick={onClose} className="shrink-0">
+            <X className="size-4" aria-hidden />
+          </IconButton>
         </div>
-        <IconButton label="Close" variant="ghost" size="sm" onClick={onClose}>
-          <X className="size-4" aria-hidden />
-        </IconButton>
+
+        {children && (
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5">
+            {children}
+          </div>
+        )}
+
+        {footer && (
+          <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-cream-200 px-5 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-6 sm:pb-4">
+            {footer}
+          </div>
+        )}
       </div>
-
-      {children && <div className="px-5 py-4 sm:px-6 sm:py-5">{children}</div>}
-
-      {footer && (
-        <div className="flex flex-wrap justify-end gap-2 border-t border-cream-200 px-5 py-4 sm:px-6">
-          {footer}
-        </div>
-      )}
     </dialog>
   );
 }

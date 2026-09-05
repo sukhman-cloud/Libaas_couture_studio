@@ -13,6 +13,7 @@ import {
   SORT_OPTIONS,
   type CatalogFilterParams,
 } from "@/lib/catalog/shop-params";
+import { cn } from "@/lib/utils";
 import type { CatalogFacets } from "@/server/data/repositories";
 import type { Category, Collection } from "@/types/domain";
 
@@ -39,11 +40,15 @@ function SortForm({
     ([key]) => key !== "sort" && key !== "page",
   );
   return (
-    <form method="get" action={basePath} className="flex items-end gap-2">
+    <form
+      method="get"
+      action={basePath}
+      className="flex w-full items-end gap-2 sm:w-auto"
+    >
       {carried.map(([key, value]) => (
         <input key={key} type="hidden" name={key} value={value} />
       ))}
-      <FormField label="Sort by" className="w-44 sm:w-52">
+      <FormField label="Sort by" className="min-w-0 flex-1 sm:w-52 sm:flex-none">
         <Select name="sort" defaultValue={sortValue}>
           {SORT_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -52,7 +57,7 @@ function SortForm({
           ))}
         </Select>
       </FormField>
-      <button type="submit" className={buttonStyles({ size: "sm" })}>
+      <button type="submit" className={cn(buttonStyles({ size: "sm" }), "shrink-0")}>
         Apply
       </button>
     </form>
@@ -123,7 +128,7 @@ export function CatalogBrowser({
       </aside>
 
       <div className="min-w-0">
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div className="mb-5 flex flex-wrap items-end gap-3 sm:justify-between">
           <div className="flex items-center gap-3">
             <Caption aria-live="polite">
               {total} {total === 1 ? "product" : "products"}

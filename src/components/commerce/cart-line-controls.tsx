@@ -41,7 +41,7 @@ export function CartLineControls({
       <div className="flex items-center gap-1 rounded-full border border-navy-200 p-1">
         <IconButton
           label={`Decrease quantity of ${productName}`}
-          size="sm"
+          size="md"
           disabled={isPending || quantity <= 1}
           onClick={() => run(() => updateCartItemQuantity(itemId, quantity - 1))}
         >
@@ -56,7 +56,7 @@ export function CartLineControls({
         </span>
         <IconButton
           label={`Increase quantity of ${productName}`}
-          size="sm"
+          size="md"
           disabled={isPending || quantity >= max}
           onClick={() => run(() => updateCartItemQuantity(itemId, quantity + 1))}
         >
@@ -66,7 +66,7 @@ export function CartLineControls({
 
       <IconButton
         label={`Remove ${productName} from your bag`}
-        size="sm"
+        size="md"
         variant="ghost"
         className="text-danger hover:bg-danger/10"
         disabled={isPending}

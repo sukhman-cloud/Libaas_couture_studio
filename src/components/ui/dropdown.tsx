@@ -188,7 +188,7 @@ export function DropdownMenu({
           : undefined
       }
       className={cn(
-        "absolute top-full z-50 mt-2 min-w-52 overflow-hidden rounded-xl border border-cream-200 bg-surface py-1.5 shadow-lg",
+        "absolute top-full z-50 mt-2 max-w-[calc(100vw-2rem)] min-w-52 overflow-hidden rounded-xl border border-cream-200 bg-surface py-1.5 shadow-lg",
         align === "end" ? "right-0" : "left-0",
         className,
       )}
