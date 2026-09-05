@@ -145,24 +145,22 @@ export function ProductMediaManager({
                     {!item.isPrimary && (
                       <Button
                         variant="ghost"
-                        size="sm"
                         disabled={isPending}
                         onClick={() =>
                           run(() => setPrimaryProductMedia(productId, item.id))
                         }
                       >
-                        <Star className="size-3.5" aria-hidden />
+                        <Star className="size-4" aria-hidden />
                         Make primary
                       </Button>
                     )}
                     <Button
                       variant="ghost"
-                      size="sm"
                       className="text-danger hover:bg-danger/10"
                       disabled={isPending}
                       onClick={() => setDeleteTarget(item)}
                     >
-                      <Trash2 className="size-3.5" aria-hidden />
+                      <Trash2 className="size-4" aria-hidden />
                       Delete
                     </Button>
                   </div>

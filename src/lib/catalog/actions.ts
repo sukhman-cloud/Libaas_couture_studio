@@ -794,6 +794,32 @@ export async function archiveCategory(
   return result;
 }
 
+export async function restoreCategory(
+  categoryId: string,
+): Promise<CatalogFormState> {
+  const auth = await authorizeAdmin("products.write");
+  if (!auth.ok) return { error: auth.error };
+
+  const result = await withLock(CATALOG_LOCK, async (): Promise<CatalogFormState> => {
+    const repos = getRepositories();
+    const category = await repos.categories.getById(categoryId);
+    if (!category) return { error: "Category not found." };
+
+    const now = new Date().toISOString();
+    // Restores as a draft — never silently back into the active catalog.
+    await repos.categories.update({
+      ...category,
+      status: "draft",
+      archivedAt: undefined,
+      updatedAt: now,
+    });
+    return { success: `“${category.name}” restored as a draft.` };
+  });
+
+  if (result.success) revalidateCatalog();
+  return result;
+}
+
 /* ── collections ────────────────────────────────────────────────── */
 
 export async function saveCollection(
@@ -901,6 +927,32 @@ export async function archiveCollection(
       updatedAt: now,
     });
     return { success: `“${collection.name}” archived.` };
+  });
+
+  if (result.success) revalidateCatalog();
+  return result;
+}
+
+export async function restoreCollection(
+  collectionId: string,
+): Promise<CatalogFormState> {
+  const auth = await authorizeAdmin("products.write");
+  if (!auth.ok) return { error: auth.error };
+
+  const result = await withLock(CATALOG_LOCK, async (): Promise<CatalogFormState> => {
+    const repos = getRepositories();
+    const collection = await repos.collections.getById(collectionId);
+    if (!collection) return { error: "Collection not found." };
+
+    const now = new Date().toISOString();
+    // Restores as a draft — never silently back into the active catalog.
+    await repos.collections.update({
+      ...collection,
+      status: "draft",
+      archivedAt: undefined,
+      updatedAt: now,
+    });
+    return { success: `“${collection.name}” restored as a draft.` };
   });
 
   if (result.success) revalidateCatalog();

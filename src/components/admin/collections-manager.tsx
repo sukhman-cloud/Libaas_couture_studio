@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
-import { Archive, Pencil, Plus, Settings2 } from "lucide-react";
+import { Archive, Pencil, Plus, RotateCcw, Settings2 } from "lucide-react";
 import { StatusBadge } from "@/components/admin/catalog-badges";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import { useToast } from "@/components/ui/toast";
 import { Caption, Heading, Text } from "@/components/ui/typography";
 import {
   archiveCollection,
+  restoreCollection,
   saveCollection,
   setProductCollectionMembership,
   type CatalogFormState,
@@ -225,7 +226,17 @@ export function CollectionsManager({
                       <Pencil className="size-3.5" aria-hidden />
                       Edit
                     </Button>
-                    {collection.status !== "archived" && (
+                    {collection.status === "archived" ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => run(() => restoreCollection(collection.id))}
+                        disabled={isPending}
+                      >
+                        <RotateCcw className="size-3.5" aria-hidden />
+                        Restore
+                      </Button>
+                    ) : (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -293,7 +304,17 @@ export function CollectionsManager({
                           <Pencil className="size-3.5" aria-hidden />
                           Edit
                         </Button>
-                        {collection.status !== "archived" && (
+                        {collection.status === "archived" ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => run(() => restoreCollection(collection.id))}
+                            disabled={isPending}
+                          >
+                            <RotateCcw className="size-3.5" aria-hidden />
+                            Restore
+                          </Button>
+                        ) : (
                           <Button
                             variant="ghost"
                             size="sm"

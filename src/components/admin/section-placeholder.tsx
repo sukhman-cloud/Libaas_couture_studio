@@ -27,7 +27,7 @@ export function AdminSectionPlaceholder({
       <div className="mt-6">
         <EmptyState
           icon={icon}
-          title={`${title} arrives in ${phase}`}
+          title={`Arrives in ${phase}`}
           description={description}
           action={action}
         />

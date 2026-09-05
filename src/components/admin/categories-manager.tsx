@@ -7,7 +7,7 @@ import {
   useState,
   useTransition,
 } from "react";
-import { Archive, Pencil, Plus } from "lucide-react";
+import { Archive, Pencil, Plus, RotateCcw } from "lucide-react";
 import { StatusBadge } from "@/components/admin/catalog-badges";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ import { useToast } from "@/components/ui/toast";
 import { Caption, Heading } from "@/components/ui/typography";
 import {
   archiveCategory,
+  restoreCategory,
   saveCategory,
   type CatalogFormState,
 } from "@/lib/catalog/actions";
@@ -233,7 +234,17 @@ export function CategoriesManager({
                     <Pencil className="size-3.5" aria-hidden />
                     Edit
                   </Button>
-                  {category.status !== "archived" && (
+                  {category.status === "archived" ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => run(() => restoreCategory(category.id))}
+                      disabled={isPending}
+                    >
+                      <RotateCcw className="size-3.5" aria-hidden />
+                      Restore
+                    </Button>
+                  ) : (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -289,7 +300,17 @@ export function CategoriesManager({
                         <Pencil className="size-3.5" aria-hidden />
                         Edit
                       </Button>
-                      {category.status !== "archived" && (
+                      {category.status === "archived" ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => run(() => restoreCategory(category.id))}
+                          disabled={isPending}
+                        >
+                          <RotateCcw className="size-3.5" aria-hidden />
+                          Restore
+                        </Button>
+                      ) : (
                         <Button
                           variant="ghost"
                           size="sm"

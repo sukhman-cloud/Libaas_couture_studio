@@ -162,14 +162,35 @@ async function buildAdminItemViews(order: Order): Promise<AdminOrderItemView[]> 
   return buildOrderItemViews(order);
 }
 
-function activityView(activity: OrderActivity): AdminOrderActivityView {
+function activityView(
+  activity: OrderActivity,
+  actorNames: Map<string, string>,
+): AdminOrderActivityView {
   return {
     type: activity.type,
     ...(activity.fromStatus ? { fromStatus: activity.fromStatus } : {}),
     ...(activity.toStatus ? { toStatus: activity.toStatus } : {}),
-    actorName: activity.actorUserId ?? "System",
+    actorName: activity.actorUserId
+      ? (actorNames.get(activity.actorUserId) ?? "Former staff member")
+      : "System",
     createdAt: activity.createdAt,
   };
+}
+
+/** Resolve every distinct actor id in one batch — never one lookup per
+ *  activity row. A missing user (account since removed) reads honestly
+ *  as "Former staff member" rather than a raw id or a silent "System". */
+async function resolveActorNames(actorUserIds: Array<string | undefined>): Promise<Map<string, string>> {
+  const ids = [...new Set(actorUserIds.filter((id): id is string => Boolean(id)))];
+  if (ids.length === 0) return new Map();
+  const repos = getRepositories();
+  const users = await Promise.all(ids.map((id) => repos.users.getById(id)));
+  const names = new Map<string, string>();
+  ids.forEach((id, index) => {
+    const user = users[index];
+    if (user) names.set(id, user.name);
+  });
+  return names;
 }
 
 /* ── queries ────────────────────────────────────────────────────── */
@@ -296,6 +317,7 @@ export async function getAdminOrderByNumber(
     customizationStatuses: customizationRequests.map((request) => request.status),
     inventoryShortfalls,
   });
+  const actorNames = await resolveActorNames(activities.map((a) => a.actorUserId));
 
   return {
     orderNumber: order.orderNumber,
@@ -312,7 +334,7 @@ export async function getAdminOrderByNumber(
     total: order.total,
     itemCount: order.items.length,
     totalQuantity: order.items.reduce((sum, i) => sum + i.quantity, 0),
-    activities: activities.map(activityView),
+    activities: activities.map((activity) => activityView(activity, actorNames)),
     notes: notes.map((note) => ({
       authorName: note.authorName,
       body: note.body,
@@ -403,6 +425,7 @@ export async function addAdminOrderNote(
   }
 
   try {
+    const author = await getRepositories().users.getById(auth.session.sub);
     await getRepositories().transaction(async (tx) => {
       const order = await tx.orders.getByOrderNumber(orderNumber);
       if (!order) throw new Error("Order not found.");
@@ -411,7 +434,7 @@ export async function addAdminOrderNote(
         id: randomUUID(),
         orderId: order.id,
         authorUserId: auth.session.sub,
-        authorName: "Studio admin",
+        authorName: author?.name ?? "Studio admin",
         body: noteBody,
         createdAt: now,
       });

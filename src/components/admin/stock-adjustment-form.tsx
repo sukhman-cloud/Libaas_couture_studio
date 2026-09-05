@@ -6,6 +6,7 @@ import { FormField } from "@/components/ui/form-field";
 import { InputControl } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useActionToast } from "@/components/admin/use-action-toast";
 import {
   adjustStockAction,
   initialInventoryActionState,
@@ -44,6 +45,8 @@ export function StockAdjustmentForm({
     adjustStockAction,
     initialInventoryActionState,
   );
+
+  useActionToast(state);
 
   return (
     <form action={action} className="space-y-3">

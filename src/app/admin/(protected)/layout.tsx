@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/layout/admin-sidebar";
 import { AdminTopbar } from "@/components/layout/admin-topbar";
 import { getAdminSession } from "@/lib/auth/session";
+import { getRepositories } from "@/server/data";
 
 /**
  * Guarded admin shell. The middleware already redirects requests without a
@@ -16,6 +17,10 @@ export default async function AdminLayout({
     redirect("/admin/login");
   }
 
+  // Real name/email for the topbar — the session itself only carries the
+  // user id and role, never a display name.
+  const user = await getRepositories().users.getById(session.sub);
+
   return (
     <div className="min-h-dvh bg-cream-100">
       <a
@@ -26,7 +31,11 @@ export default async function AdminLayout({
       </a>
       <AdminSidebar />
       <div className="lg:pl-64">
-        <AdminTopbar />
+        <AdminTopbar
+          name={user?.name ?? "Admin"}
+          email={user?.email}
+          role={session.role}
+        />
         <main
           id="admin-main"
           tabIndex={-1}

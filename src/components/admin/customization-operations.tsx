@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { buttonStyles } from "@/components/ui/button";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/toast";
 import {
   addCustomizationNoteAction,
   changeCustomizationStatusAction,
@@ -14,6 +15,19 @@ import type { CustomizationStatus } from "@/types/domain";
 
 /** Confirmation is required before a terminal/negative transition. */
 const CONFIRM_STATUSES = new Set<CustomizationStatus>(["rejected", "cancelled"]);
+
+/** Same intent as components/admin/use-action-toast.ts, adapted for this
+ *  action module's {success, error} shape (no `ok` boolean). */
+function useCustomizationActionToast(state: CustomizationAdminActionState) {
+  const { toast } = useToast();
+  const last = useRef<CustomizationAdminActionState | null>(null);
+  useEffect(() => {
+    if (last.current === state) return;
+    last.current = state;
+    if (state.success) toast({ title: state.success, tone: "success" });
+    else if (state.error) toast({ title: state.error, tone: "danger" });
+  }, [state, toast]);
+}
 
 export function CustomizationOperations({
   requestId,
@@ -32,6 +46,9 @@ export function CustomizationOperations({
   >(addCustomizationNoteAction, {});
   const formRefs = useRef<Partial<Record<CustomizationStatus, HTMLFormElement>>>({});
   const [confirmTarget, setConfirmTarget] = useState<CustomizationStatus | null>(null);
+
+  useCustomizationActionToast(status);
+  useCustomizationActionToast(note);
 
   return (
     <div className="grid gap-5 lg:grid-cols-2">

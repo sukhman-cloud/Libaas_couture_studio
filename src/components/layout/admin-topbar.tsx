@@ -1,9 +1,11 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { Bell, LogOut } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Breadcrumb, type BreadcrumbItem } from "@/components/ui/breadcrumb";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import {
   Dropdown,
   DropdownItem,
@@ -15,6 +17,14 @@ import {
 import { adminNavItems } from "@/config/nav";
 import { logoutAdmin } from "@/lib/auth/actions";
 import { cn } from "@/lib/utils";
+import type { RoleName } from "@/types/domain";
+
+const ROLE_LABELS: Record<RoleName, string> = {
+  owner: "Owner",
+  manager: "Manager",
+  tailor: "Tailor",
+  staff: "Staff",
+};
 
 function breadcrumbsFor(pathname: string): BreadcrumbItem[] {
   if (pathname === "/admin") return [{ title: "Dashboard" }];
@@ -32,8 +42,17 @@ const triggerClasses =
   "inline-flex size-11 items-center justify-center rounded-full text-navy-700 transition-colors hover:bg-navy-50";
 
 /** Admin top bar: breadcrumbs + notifications + profile menu. */
-export function AdminTopbar() {
+export function AdminTopbar({
+  name,
+  email,
+  role,
+}: {
+  name: string;
+  email?: string;
+  role: RoleName;
+}) {
   const pathname = usePathname();
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
 
   return (
     <header className="sticky top-14 z-30 border-b border-cream-200 bg-cream-50/85 backdrop-blur-md lg:top-0">
@@ -62,16 +81,18 @@ export function AdminTopbar() {
               aria-label="Admin account menu"
               aria-haspopup="menu"
             >
-              <Avatar name="Studio Admin" size="sm" />
+              <Avatar name={name} size="sm" />
             </DropdownTrigger>
             <DropdownMenu label="Admin account">
-              <DropdownLabel>Signed in as Studio Admin</DropdownLabel>
+              <div className="px-4 pb-2 pt-2.5">
+                <p className="wrap-break-word text-sm font-medium text-navy-800">{name}</p>
+                <p className="mt-0.5 wrap-break-word text-xs text-muted">
+                  {ROLE_LABELS[role]}
+                  {email ? ` · ${email}` : ""}
+                </p>
+              </div>
               <DropdownSeparator />
-              <DropdownItem
-                onSelect={() => {
-                  void logoutAdmin();
-                }}
-              >
+              <DropdownItem onSelect={() => setConfirmSignOut(true)}>
                 <LogOut className="size-4" aria-hidden />
                 Sign out
               </DropdownItem>
@@ -79,6 +100,17 @@ export function AdminTopbar() {
           </Dropdown>
         </div>
       </div>
+
+      <ConfirmationDialog
+        open={confirmSignOut}
+        onClose={() => setConfirmSignOut(false)}
+        onConfirm={() => {
+          void logoutAdmin();
+        }}
+        title="Sign out?"
+        description="You'll need to sign in again to access the admin."
+        confirmLabel="Sign out"
+      />
     </header>
   );
 }

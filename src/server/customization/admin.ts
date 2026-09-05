@@ -46,6 +46,22 @@ export async function listAdminCustomizations(raw: { q?: string; status?: string
   return { items: items.map(({ row, user }) => ({ id: row.id, status: row.status, details: row.details, customerName: user?.name ?? "Unknown customer", ...(user?.email ? { customerEmail: user.email } : {}), ...(row.orderId ? { orderId: row.orderId } : {}), createdAt: row.createdAt, updatedAt: row.updatedAt })), q, status };
 }
 
+/** Resolve every distinct actor id in one batch — mirrors
+ *  src/server/orders/admin.ts's resolveActorNames exactly. A missing user
+ *  (account since removed) reads honestly as "Former staff member". */
+async function resolveActorNames(actorUserIds: Array<string | undefined>): Promise<Map<string, string>> {
+  const ids = [...new Set(actorUserIds.filter((id): id is string => Boolean(id)))];
+  if (ids.length === 0) return new Map();
+  const repos = getRepositories();
+  const users = await Promise.all(ids.map((id) => repos.users.getById(id)));
+  const names = new Map<string, string>();
+  ids.forEach((id, index) => {
+    const user = users[index];
+    if (user) names.set(id, user.name);
+  });
+  return names;
+}
+
 export async function getAdminCustomization(id: string): Promise<AdminCustomizationDetail | null> {
   await requireRead();
   const request = await getRepositories().customizationRequests.getById(id);
@@ -56,7 +72,8 @@ export async function getAdminCustomization(id: string): Promise<AdminCustomizat
     getRepositories().customizationActivities.listByRequestId(id),
     getRepositories().customizationNotes.listByRequestId(id),
   ]);
-  return { id: request.id, status: request.status, details: request.details, customerName: user?.name ?? "Unknown customer", ...(user?.email ? { customerEmail: user.email } : {}), ...(user?.phone ? { customerPhone: user.phone } : {}), ...(request.productId ? { productId: request.productId } : {}), ...(request.orderId ? { orderId: request.orderId } : {}), ...(order?.orderNumber ? { orderNumber: order.orderNumber } : {}), ...(request.orderItemId ? { orderItemId: request.orderItemId } : {}), createdAt: request.createdAt, updatedAt: request.updatedAt, activities: activities.map((item) => ({ type: item.type, ...(item.fromStatus ? { fromStatus: item.fromStatus } : {}), ...(item.toStatus ? { toStatus: item.toStatus } : {}), actorName: item.actorUserId ?? "System", createdAt: item.createdAt })), notes: notes.map((note) => ({ authorName: note.authorName, body: note.body, createdAt: note.createdAt })) };
+  const actorNames = await resolveActorNames(activities.map((a) => a.actorUserId));
+  return { id: request.id, status: request.status, details: request.details, customerName: user?.name ?? "Unknown customer", ...(user?.email ? { customerEmail: user.email } : {}), ...(user?.phone ? { customerPhone: user.phone } : {}), ...(request.productId ? { productId: request.productId } : {}), ...(request.orderId ? { orderId: request.orderId } : {}), ...(order?.orderNumber ? { orderNumber: order.orderNumber } : {}), ...(request.orderItemId ? { orderItemId: request.orderItemId } : {}), createdAt: request.createdAt, updatedAt: request.updatedAt, activities: activities.map((item) => ({ type: item.type, ...(item.fromStatus ? { fromStatus: item.fromStatus } : {}), ...(item.toStatus ? { toStatus: item.toStatus } : {}), actorName: item.actorUserId ? (actorNames.get(item.actorUserId) ?? "Former staff member") : "System", createdAt: item.createdAt })), notes: notes.map((note) => ({ authorName: note.authorName, body: note.body, createdAt: note.createdAt })) };
 }
 
 export type CustomizationMutationResult = { ok: true; status?: CustomizationStatus } | { ok: false; error: string };
@@ -85,12 +102,13 @@ export async function addCustomizationNote(id: string, body: string): Promise<Cu
   const clean = body.trim();
   if (!clean || clean.length > CUSTOMIZATION_NOTE_MAX) return { ok: false, error: `Notes must be 1-${CUSTOMIZATION_NOTE_MAX} characters.` };
   try {
+    const author = await getRepositories().users.getById(auth.session.sub);
     await getRepositories().transaction(async (tx) => {
       const request = await tx.customizationRequests.getById(id);
       if (!request) throw new Error("Request not found.");
       const now = new Date().toISOString();
-      await tx.customizationNotes.create({ id: randomUUID(), customizationRequestId: id, authorUserId: auth.session.sub, authorName: "Studio admin", body: clean, createdAt: now });
-      await tx.customizationActivities.create({ id: randomUUID(), customizationRequestId: id, type: "internal_note_added", createdAt: now });
+      await tx.customizationNotes.create({ id: randomUUID(), customizationRequestId: id, authorUserId: auth.session.sub, authorName: author?.name ?? "Studio admin", body: clean, createdAt: now });
+      await tx.customizationActivities.create({ id: randomUUID(), customizationRequestId: id, type: "internal_note_added", actorUserId: auth.session.sub, createdAt: now });
     });
     return { ok: true };
   } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Could not save the note." }; }

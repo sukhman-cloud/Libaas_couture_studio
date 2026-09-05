@@ -13,6 +13,7 @@ import {
   CUSTOMIZATION_STATUS_LABELS,
   nextCustomizationStatuses,
 } from "@/server/customization/workflow";
+import type { CustomizationStatus } from "@/types/domain";
 
 export const metadata: Metadata = { title: "Admin · Customization" };
 
@@ -20,6 +21,23 @@ function badgeTone(status: string): "danger" | "success" | "gold" {
   if (status === "rejected" || status === "cancelled") return "danger";
   if (status === "completed") return "success";
   return "gold";
+}
+
+const CUSTOMIZATION_ACTIVITY_LABELS: Record<string, string> = {
+  request_approved: "Request approved",
+  request_rejected: "Request rejected",
+  request_completed: "Request completed",
+  internal_note_added: "Internal note added",
+};
+
+function customizationActivityLabel(activity: { type: string; toStatus?: string }): string {
+  if (activity.type === "status_changed") {
+    const label = activity.toStatus
+      ? CUSTOMIZATION_STATUS_LABELS[activity.toStatus as CustomizationStatus]
+      : undefined;
+    return `Status changed to ${label ?? "updated"}`;
+  }
+  return CUSTOMIZATION_ACTIVITY_LABELS[activity.type] ?? activity.type.replace(/_/g, " ");
 }
 
 const dateTimeFormatter = new Intl.DateTimeFormat("en-IN", {
@@ -139,7 +157,7 @@ export default async function AdminCustomizationDetail({
                   {request.activities.map((activity, index) => (
                     <li key={`${activity.createdAt}-${index}`} className="text-sm">
                       <p className="font-medium text-navy-800">
-                        {activity.type.replaceAll("_", " ")}
+                        {customizationActivityLabel(activity)}
                       </p>
                       <Caption className="block">
                         {activity.actorName} · {dateTimeFormatter.format(new Date(activity.createdAt))}

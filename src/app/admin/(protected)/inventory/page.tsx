@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AlertTriangle, Boxes, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { AlertTriangle, Boxes, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonStyles } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/ui/form-field";
 import { PageHeader } from "@/components/ui/page-header";
+import { Pagination } from "@/components/ui/pagination";
 import { SearchInput } from "@/components/ui/search-input";
 import { Select } from "@/components/ui/select";
 import {
@@ -73,11 +74,6 @@ export default async function AdminInventoryPage({
   const activeQuery: Record<string, string> = {};
   if (q) activeQuery.q = q;
   if (filter) activeQuery.filter = filter;
-  const hrefForPage = (target: number) => {
-    const search = new URLSearchParams(activeQuery);
-    search.set("page", String(target));
-    return `/admin/inventory?${search.toString()}`;
-  };
 
   return (
     <div>
@@ -228,34 +224,17 @@ export default async function AdminInventoryPage({
             </Table>
 
             {list.pageCount > 1 && (
-              <nav
-                aria-label="Pagination"
-                className="flex flex-wrap items-center justify-between gap-3"
-              >
+              <div className="flex flex-col items-center gap-2">
                 <Caption>
                   Page {page} of {list.pageCount}
                 </Caption>
-                <div className="flex gap-2">
-                  {page > 1 && (
-                    <Link
-                      href={hrefForPage(page - 1)}
-                      className={buttonStyles({ variant: "outline", size: "sm" })}
-                    >
-                      <ChevronLeft className="size-4" aria-hidden />
-                      Previous
-                    </Link>
-                  )}
-                  {page < list.pageCount && (
-                    <Link
-                      href={hrefForPage(page + 1)}
-                      className={buttonStyles({ variant: "outline", size: "sm" })}
-                    >
-                      Next
-                      <ChevronRight className="size-4" aria-hidden />
-                    </Link>
-                  )}
-                </div>
-              </nav>
+                <Pagination
+                  page={page}
+                  pageCount={list.pageCount}
+                  basePath="/admin/inventory"
+                  params={activeQuery}
+                />
+              </div>
             )}
           </>
         )}

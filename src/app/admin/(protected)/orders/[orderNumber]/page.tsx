@@ -64,12 +64,14 @@ function orderActivityLabel(activity: { type: string; toStatus?: string }): stri
 }
 
 /**
- * Admin order detail (Phase 7C) — everything the studio needs to fulfil
+ * Admin order detail (Phase 7C+) — everything the studio needs to fulfil
  * the order, all of it from the order's IMMUTABLE snapshots: customer
  * details, delivery address, product names/prices and, for stitched
  * items, the order-time measurement snapshot. The customer's live
- * profile/address/product records are never consulted here, and no
- * mutation exists on this page (the status workflow is a later phase).
+ * profile/address/product records are never consulted here. Status,
+ * payment and shipment mutations live in OrderOperations/
+ * PaymentOperations/ShippingOperations below, each server-authorized
+ * independently of this read.
  */
 export default async function AdminOrderDetailPage({
   params,

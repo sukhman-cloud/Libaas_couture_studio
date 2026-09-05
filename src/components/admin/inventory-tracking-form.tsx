@@ -2,8 +2,10 @@
 
 import { useActionState } from "react";
 import { buttonStyles } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { FormField } from "@/components/ui/form-field";
 import { InputControl } from "@/components/ui/input";
+import { useActionToast } from "@/components/admin/use-action-toast";
 import {
   initialInventoryActionState,
   setInventoryTrackingAction,
@@ -29,20 +31,19 @@ export function InventoryTrackingForm({
     initialInventoryActionState,
   );
 
+  useActionToast(state);
+
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="productId" value={productId} />
 
-      <label className="flex items-center gap-2 text-sm text-navy-800">
-        <input
-          type="checkbox"
-          name="trackingEnabled"
-          value="true"
-          defaultChecked={trackingEnabled}
-          className="size-4 rounded border-navy-200"
-        />
-        Track stock for this product
-      </label>
+      <Checkbox
+        name="trackingEnabled"
+        value="true"
+        defaultChecked={trackingEnabled}
+        label="Track stock for this product"
+        description="Disabling this doesn't delete quantities or history — it only stops out-of-stock products from blocking checkout."
+      />
 
       <FormField
         label="Low-stock threshold"

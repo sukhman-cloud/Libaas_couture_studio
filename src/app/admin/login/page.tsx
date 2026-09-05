@@ -1,10 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { siteConfig } from "@/config/site";
 import { loginAdmin, type LoginFormState } from "@/lib/auth/actions";
 
@@ -15,6 +16,14 @@ export default function AdminLoginPage() {
     loginAdmin,
     initialState,
   );
+  const emailRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Alert has role="alert" so screen readers announce it on its own;
+    // moving focus back to email lets a keyboard user retry immediately
+    // instead of having to tab back up from wherever "Sign in" left focus.
+    if (state.error) emailRef.current?.focus();
+  }, [state.error]);
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-navy-900 px-4 py-10">
@@ -41,18 +50,20 @@ export default function AdminLoginPage() {
         <form action={formAction} className="space-y-4" noValidate>
           {state.error && <Alert tone="danger">{state.error}</Alert>}
           <Input
+            ref={emailRef}
             label="Email"
             name="email"
             type="email"
             autoComplete="username"
             required
+            invalid={Boolean(state.error)}
           />
-          <Input
+          <PasswordInput
             label="Password"
             name="password"
-            type="password"
             autoComplete="current-password"
             required
+            invalid={Boolean(state.error)}
           />
           <Button type="submit" className="w-full" isLoading={isPending}>
             Sign in

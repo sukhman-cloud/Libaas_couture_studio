@@ -6,6 +6,7 @@ import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { FormField } from "@/components/ui/form-field";
 import { InputControl } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { useActionToast } from "@/components/admin/use-action-toast";
 import {
   createShipmentAction,
   initialOrderActionState,
@@ -54,6 +55,10 @@ export function ShippingOperations({
   );
   const formRefs = useRef<Partial<Record<ShipmentStatus, HTMLFormElement>>>({});
   const [confirmTarget, setConfirmTarget] = useState<ShipmentStatus | null>(null);
+
+  useActionToast(createState);
+  useActionToast(statusState);
+  useActionToast(trackingState);
 
   if (!hasShipment) {
     return (

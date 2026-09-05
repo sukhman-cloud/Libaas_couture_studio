@@ -4,6 +4,7 @@ import { useActionState, useRef, useState } from "react";
 import { buttonStyles } from "@/components/ui/button";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { useActionToast } from "@/components/admin/use-action-toast";
 import {
   addOrderNoteAction,
   changeOrderStatusAction,
@@ -29,6 +30,9 @@ export function OrderOperations({
   );
   const formRefs = useRef<Partial<Record<OrderStatus, HTMLFormElement>>>({});
   const [confirmTarget, setConfirmTarget] = useState<OrderStatus | null>(null);
+
+  useActionToast(statusState);
+  useActionToast(noteState);
 
   return (
     <div className="grid gap-5 lg:grid-cols-2">

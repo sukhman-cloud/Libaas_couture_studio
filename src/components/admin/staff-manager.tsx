@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/ui/form-field";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { RowCard, RowCardField, RowCardList, Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
@@ -49,6 +51,9 @@ function NewStaffForm() {
   const { toast } = useToast();
   const lastState = useRef<CreateStaffFormState | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const [role, setRole] = useState<RoleName>("staff");
+  const [confirmOwner, setConfirmOwner] = useState(false);
+  const ownerConfirmed = useRef(false);
 
   useEffect(() => {
     if (lastState.current === state) return;
@@ -56,6 +61,8 @@ function NewStaffForm() {
     if (state.success) {
       toast({ title: state.success, tone: "success" });
       formRef.current?.reset();
+      setRole("staff");
+      ownerConfirmed.current = false;
     } else if (state.error) {
       toast({ title: state.error, tone: "danger" });
     }
@@ -67,7 +74,18 @@ function NewStaffForm() {
         <Heading level={3} className="text-lg">
           New staff account
         </Heading>
-        <form ref={formRef} action={formAction} className="space-y-4" noValidate>
+        <form
+          ref={formRef}
+          action={formAction}
+          className="space-y-4"
+          noValidate
+          onSubmit={(event) => {
+            if (role === "owner" && !ownerConfirmed.current) {
+              event.preventDefault();
+              setConfirmOwner(true);
+            }
+          }}
+        >
           <div className="grid gap-4 sm:grid-cols-2">
             <Input
               label="Name"
@@ -85,17 +103,23 @@ function NewStaffForm() {
             />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Input
+            <PasswordInput
               label="Temporary password"
               name="password"
-              type="password"
               autoComplete="new-password"
               required
               hint="At least 8 characters. Share it with them directly, not by email."
               error={state.fieldErrors?.password}
             />
             <FormField label="Role" error={state.fieldErrors?.role}>
-              <Select name="role" defaultValue="staff">
+              <Select
+                name="role"
+                value={role}
+                onChange={(event) => {
+                  setRole(event.target.value as RoleName);
+                  ownerConfirmed.current = false;
+                }}
+              >
                 <option value="staff">Staff</option>
                 <option value="tailor">Tailor</option>
                 <option value="manager">Manager</option>
@@ -108,6 +132,19 @@ function NewStaffForm() {
             Create account
           </Button>
         </form>
+
+        <ConfirmationDialog
+          open={confirmOwner}
+          onClose={() => setConfirmOwner(false)}
+          onConfirm={() => {
+            setConfirmOwner(false);
+            ownerConfirmed.current = true;
+            formRef.current?.requestSubmit();
+          }}
+          title="Create an owner account?"
+          description="Owner has full access to every part of the admin, including staff, payments and settings. Only give this role to someone who should have complete control."
+          confirmLabel="Create owner account"
+        />
       </CardContent>
     </Card>
   );

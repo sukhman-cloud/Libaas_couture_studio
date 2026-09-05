@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Scissors, Search, ShoppingBag } from "lucide-react";
+import { Scissors, Search, ShoppingBag } from "lucide-react";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
 import { PaymentStatusBadge } from "@/components/orders/payment-status-badge";
 import { ShippingStatusBadge } from "@/components/orders/shipping-status-badge";
@@ -9,6 +9,7 @@ import { buttonStyles } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/ui/form-field";
 import { PageHeader } from "@/components/ui/page-header";
+import { Pagination } from "@/components/ui/pagination";
 import { SearchInput } from "@/components/ui/search-input";
 import { Select } from "@/components/ui/select";
 import {
@@ -83,11 +84,6 @@ export default async function AdminOrdersPage({
   if (query.q) activeQuery.q = query.q;
   if (query.status) activeQuery.status = query.status;
   if (query.sort !== "newest") activeQuery.sort = query.sort;
-  const hrefForPage = (target: number) => {
-    const search = new URLSearchParams(activeQuery);
-    search.set("page", String(target));
-    return `/admin/orders?${search.toString()}`;
-  };
 
   return (
     <div>
@@ -196,6 +192,11 @@ export default async function AdminOrdersPage({
                       <RowCardField label="Customer">
                         <span className="wrap-break-word">{order.customerName}</span>
                       </RowCardField>
+                      {order.customerEmail && (
+                        <RowCardField label="Email">
+                          <span className="wrap-break-word">{order.customerEmail}</span>
+                        </RowCardField>
+                      )}
                       <RowCardField label="Items">
                         {order.totalQuantity}{" "}
                         {order.totalQuantity === 1 ? "piece" : "pieces"}
@@ -214,6 +215,12 @@ export default async function AdminOrdersPage({
                           <PaymentStatusBadge status={order.paymentStatus} />
                           <ShippingStatusBadge status={order.shipmentStatus} />
                         </div>
+                      </RowCardField>
+                      <RowCardField label="Tracking">
+                        <span>
+                          {order.hasTracking ? "Tracking added" : "No tracking"}
+                          {!order.fulfillmentReady && " · Blocked"}
+                        </span>
                       </RowCardField>
                     </div>
                   </RowCard>
@@ -285,34 +292,17 @@ export default async function AdminOrdersPage({
               </Table>
 
               {list.pageCount > 1 && (
-                <nav
-                  aria-label="Pagination"
-                  className="flex flex-wrap items-center justify-between gap-3"
-                >
+                <div className="flex flex-col items-center gap-2">
                   <Caption>
                     Page {query.page} of {list.pageCount}
                   </Caption>
-                  <div className="flex gap-2">
-                    {query.page > 1 && (
-                      <Link
-                        href={hrefForPage(query.page - 1)}
-                        className={buttonStyles({ variant: "outline", size: "sm" })}
-                      >
-                        <ChevronLeft className="size-4" aria-hidden />
-                        Previous
-                      </Link>
-                    )}
-                    {query.page < list.pageCount && (
-                      <Link
-                        href={hrefForPage(query.page + 1)}
-                        className={buttonStyles({ variant: "outline", size: "sm" })}
-                      >
-                        Next
-                        <ChevronRight className="size-4" aria-hidden />
-                      </Link>
-                    )}
-                  </div>
-                </nav>
+                  <Pagination
+                    page={query.page}
+                    pageCount={list.pageCount}
+                    basePath="/admin/orders"
+                    params={activeQuery}
+                  />
+                </div>
               )}
             </>
           )}
