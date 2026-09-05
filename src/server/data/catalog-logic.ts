@@ -4,12 +4,15 @@ import type {
   Collection,
   Order,
   Product,
+  User,
 } from "@/types/domain";
 import {
   ADMIN_SEARCH_FIELDS,
   type CatalogFacets,
   type CategoryQuery,
   type CollectionQuery,
+  type CustomerQuery,
+  type CustomerSort,
   type ListParams,
   type OrderQuery,
   type OrderSort,
@@ -225,6 +228,8 @@ export function queryCollections(
  */
 export function orderMatches(order: Order, query: OrderQuery): boolean {
   if (query.status && order.status !== query.status) return false;
+  if (query.createdAtFrom && order.createdAt < query.createdAtFrom) return false;
+  if (query.createdAtTo && order.createdAt > query.createdAtTo) return false;
   if (query.search) {
     return matchesText(
       [order.orderNumber, order.customer.name, order.customer.email],
@@ -273,4 +278,39 @@ export function sortOrders(rows: Order[], sort: OrderSort = "newest"): Order[] {
 export function queryOrders(rows: Order[], query: OrderQuery): Paged<Order> {
   const matched = rows.filter((order) => orderMatches(order, query));
   return page(sortOrders(matched, query.sort), query);
+}
+
+export function customerMatches(user: User, query: CustomerQuery): boolean {
+  if (query.search) {
+    return matchesText([user.name, user.email, user.phone], query.search);
+  }
+  return true;
+}
+
+/** Stable customer sorting — every sort ends in an id tiebreak so paging
+ *  never shuffles rows between requests. */
+export function sortCustomers(rows: User[], sort: CustomerSort = "newest"): User[] {
+  const byId = (a: User, b: User) => a.id.localeCompare(b.id);
+  const sorted = [...rows];
+  switch (sort) {
+    case "oldest":
+      sorted.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || byId(a, b));
+      break;
+    case "name_asc":
+      sorted.sort((a, b) => a.name.localeCompare(b.name) || byId(a, b));
+      break;
+    case "name_desc":
+      sorted.sort((a, b) => b.name.localeCompare(a.name) || byId(a, b));
+      break;
+    case "newest":
+    default:
+      sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || byId(a, b));
+      break;
+  }
+  return sorted;
+}
+
+export function queryCustomers(rows: User[], query: CustomerQuery): Paged<User> {
+  const matched = rows.filter((user) => customerMatches(user, query));
+  return page(sortCustomers(matched, query.sort), query);
 }

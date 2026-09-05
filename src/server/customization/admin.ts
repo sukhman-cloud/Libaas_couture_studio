@@ -2,7 +2,7 @@ import "server-only";
 import { randomUUID } from "crypto";
 import { authorizeAdmin, requireAdminSession } from "@/lib/auth/admin-guard";
 import { getRepositories } from "@/server/data";
-import type { CustomizationActivity, CustomizationRequest, CustomizationStatus } from "@/types/domain";
+import type { CustomizationActivity, CustomizationStatus } from "@/types/domain";
 import { CUSTOMIZATION_STATUSES, isCustomizationTransitionAllowed } from "@/server/customization/workflow";
 
 export const CUSTOMIZATION_NOTE_MAX = 2000;
@@ -15,6 +15,8 @@ export interface AdminCustomizationListItem {
   customerEmail?: string;
   orderId?: string;
   orderNumber?: string;
+  /** Absent when this is a fully custom design with no existing product. */
+  productId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -34,16 +36,18 @@ async function requireRead() {
   return session;
 }
 
-export async function listAdminCustomizations(raw: { q?: string; status?: string }) {
+export async function listAdminCustomizations(raw: { q?: string; status?: string; onlyCustom?: boolean }) {
   await requireRead();
   const q = (raw.q ?? "").trim().slice(0, 80).toLowerCase();
   const status = CUSTOMIZATION_STATUSES.includes(raw.status as CustomizationStatus) ? raw.status as CustomizationStatus : "";
   const rows = await getRepositories().customizationRequests.list();
   const users = await Promise.all(rows.map((row) => getRepositories().users.getById(row.userId)));
   const items = rows.map((row, index) => ({ row, user: users[index] })).filter(({ row, user }) =>
-    (!status || row.status === status) && (!q || [row.id, row.details, user?.name, user?.email].some((value) => value?.toLowerCase().includes(q))),
+    (!status || row.status === status) &&
+    (!raw.onlyCustom || !row.productId) &&
+    (!q || [row.id, row.details, user?.name, user?.email].some((value) => value?.toLowerCase().includes(q))),
   ).sort((a, b) => b.row.createdAt.localeCompare(a.row.createdAt));
-  return { items: items.map(({ row, user }) => ({ id: row.id, status: row.status, details: row.details, customerName: user?.name ?? "Unknown customer", ...(user?.email ? { customerEmail: user.email } : {}), ...(row.orderId ? { orderId: row.orderId } : {}), createdAt: row.createdAt, updatedAt: row.updatedAt })), q, status };
+  return { items: items.map(({ row, user }) => ({ id: row.id, status: row.status, details: row.details, customerName: user?.name ?? "Unknown customer", ...(user?.email ? { customerEmail: user.email } : {}), ...(row.orderId ? { orderId: row.orderId } : {}), ...(row.productId ? { productId: row.productId } : {}), createdAt: row.createdAt, updatedAt: row.updatedAt })), q, status };
 }
 
 /** Resolve every distinct actor id in one batch — mirrors

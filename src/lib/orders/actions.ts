@@ -6,6 +6,7 @@ import {
   createAdminShipment,
   recordAdminManualPayment,
   transitionAdminOrder,
+  transitionAdminPayment,
   transitionAdminShipment,
   updateAdminShipmentTracking,
   type AdminOrderMutationResult,
@@ -64,7 +65,27 @@ export async function recordManualPaymentAction(
   if (result.ok) {
     revalidatePath(`/admin/orders/${orderNumber}`);
     revalidatePath(`/account/orders/${orderNumber}`);
+    revalidatePath("/admin/payments");
     return { ...result, message: "Payment recorded as paid." };
+  }
+  return result;
+}
+
+export async function transitionPaymentAction(
+  _previous: OrderActionState,
+  formData: FormData,
+): Promise<OrderActionState> {
+  const orderNumber = formData.get("orderNumber");
+  const nextStatus = formData.get("nextStatus");
+  if (typeof orderNumber !== "string" || typeof nextStatus !== "string") {
+    return { ok: false, error: "Invalid payment action." };
+  }
+  const result = await transitionAdminPayment(orderNumber, nextStatus);
+  if (result.ok) {
+    revalidatePath(`/admin/orders/${orderNumber}`);
+    revalidatePath(`/account/orders/${orderNumber}`);
+    revalidatePath("/admin/payments");
+    return { ...result, message: "Payment status updated." };
   }
   return result;
 }

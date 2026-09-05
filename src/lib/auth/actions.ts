@@ -12,6 +12,7 @@ import {
 } from "@/lib/auth/constants";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { createSessionToken } from "@/lib/auth/session";
+import { mutateAdminAccount, rotateSession } from "@/server/account/security";
 import { getRepositories } from "@/server/data";
 import type { RoleName } from "@/types/domain";
 
@@ -236,4 +237,121 @@ export async function createStaffAccount(
   }
 
   return { success: `${name} can now sign in as ${role}.` };
+}
+
+export interface StaffMutationState {
+  error?: string;
+  success?: string;
+}
+
+/**
+ * Deactivate a staff/admin account. Mirrors customer self-deactivation
+ * exactly: the User row and credential session version are bumped in one
+ * transaction so the account can never come to rest deactivated-with-a-live-
+ * session. Owner accounts cannot deactivate themselves — that would lock the
+ * studio out if they are the only owner — and a non-owner can never
+ * deactivate an owner account (only another owner may).
+ */
+export async function deactivateStaffAccount(
+  _prev: StaffMutationState,
+  formData: FormData,
+): Promise<StaffMutationState> {
+  const auth = await authorizeAdmin("staff.manage");
+  if (!auth.ok) return { error: auth.error };
+
+  const targetUserId = String(formData.get("userId") ?? "");
+  if (!targetUserId) return { error: "Missing account." };
+  if (targetUserId === auth.session.sub) {
+    return { error: "You cannot deactivate your own account." };
+  }
+
+  const repos = getRepositories();
+  const [targetRole, actorRole] = await Promise.all([
+    repos.adminUsers.getByUserId(targetUserId).then((row) => row && repos.roles.getById(row.roleId)),
+    Promise.resolve(auth.session.role),
+  ]);
+  if (targetRole?.name === "owner" && actorRole !== "owner") {
+    return { error: "Only an owner can deactivate another owner." };
+  }
+
+  const outcome = await mutateAdminAccount(
+    targetUserId,
+    async (ctx) => {
+      await ctx.tx.users.update({ ...ctx.user, isActive: false, updatedAt: new Date().toISOString() });
+      await rotateSession(ctx);
+    },
+    { requireActive: false },
+  );
+
+  if (!outcome.ok) return { error: "That account could not be found." };
+  return { success: "Account deactivated. Their sessions have been signed out." };
+}
+
+/** Reactivate a previously deactivated staff/admin account. */
+export async function reactivateStaffAccount(
+  _prev: StaffMutationState,
+  formData: FormData,
+): Promise<StaffMutationState> {
+  const auth = await authorizeAdmin("staff.manage");
+  if (!auth.ok) return { error: auth.error };
+
+  const targetUserId = String(formData.get("userId") ?? "");
+  if (!targetUserId) return { error: "Missing account." };
+
+  const outcome = await mutateAdminAccount(
+    targetUserId,
+    async (ctx) => {
+      await ctx.tx.users.update({ ...ctx.user, isActive: true, updatedAt: new Date().toISOString() });
+    },
+    { requireActive: false },
+  );
+
+  if (!outcome.ok) return { error: "That account could not be found." };
+  return { success: "Account reactivated." };
+}
+
+const changeRoleSchema = z.object({
+  userId: z.string().trim().min(1),
+  role: z.enum(ROLE_NAMES),
+});
+
+/**
+ * Reassign a staff account's role. An owner can never be demoted by anyone
+ * but another owner, and the account cannot change its own role — role
+ * changes always come from a different, still-privileged admin.
+ */
+export async function changeStaffRole(
+  _prev: StaffMutationState,
+  formData: FormData,
+): Promise<StaffMutationState> {
+  const auth = await authorizeAdmin("staff.manage");
+  if (!auth.ok) return { error: auth.error };
+
+  const parsed = changeRoleSchema.safeParse({
+    userId: formData.get("userId"),
+    role: formData.get("role"),
+  });
+  if (!parsed.success) return { error: "Invalid request." };
+  const { userId: targetUserId, role } = parsed.data;
+
+  if (targetUserId === auth.session.sub) {
+    return { error: "You cannot change your own role." };
+  }
+
+  const repos = getRepositories();
+  const roleRow = await repos.roles.getByName(role);
+  if (!roleRow) return { error: "That role is not configured." };
+
+  const currentAdminUser = await repos.adminUsers.getByUserId(targetUserId);
+  const currentRole = currentAdminUser ? await repos.roles.getById(currentAdminUser.roleId) : null;
+  if (currentRole?.name === "owner" && auth.session.role !== "owner") {
+    return { error: "Only an owner can change another owner's role." };
+  }
+
+  const outcome = await mutateAdminAccount(targetUserId, async (ctx) => {
+    await ctx.tx.adminUsers.update({ ...ctx.adminUser, roleId: roleRow.id, updatedAt: new Date().toISOString() });
+  });
+
+  if (!outcome.ok) return { error: "That account could not be found." };
+  return { success: `Role updated to ${role}.` };
 }

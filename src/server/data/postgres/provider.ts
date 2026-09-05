@@ -12,6 +12,7 @@ import {
   publishedInOrder,
   queryCategories,
   queryCollections,
+  queryCustomers,
   queryOrders,
   sortProducts,
 } from "@/server/data/catalog-logic";
@@ -467,11 +468,22 @@ function buildPostgresRepositories(db: Db): StoreRepositories {
         // Same deliberate trade-off as the catalog: load rows and run the
         // SHARED predicates (catalog-logic.queryOrders), so search/sort
         // semantics are byte-identical across providers and Prisma's
-        // insensitive-ILIKE pitfalls never enter the picture. Status is
-        // pushed down as a cheap SQL pre-filter; revisit with real volume.
+        // insensitive-ILIKE pitfalls never enter the picture. Status and the
+        // date range are pushed down as cheap SQL pre-filters; revisit with
+        // real volume.
         const rows = await db.order.findMany({
           ...ATOMIC_READ,
-          ...(params.status ? { where: { status: params.status } } : {}),
+          where: {
+            ...(params.status ? { status: params.status } : {}),
+            ...(params.createdAtFrom || params.createdAtTo
+              ? {
+                  createdAt: {
+                    ...(params.createdAtFrom ? { gte: new Date(params.createdAtFrom) } : {}),
+                    ...(params.createdAtTo ? { lte: new Date(params.createdAtTo) } : {}),
+                  },
+                }
+              : {}),
+          },
           include: ORDER_INCLUDE,
         });
         return queryOrders(rows.map(toOrder), params);
@@ -542,6 +554,13 @@ function buildPostgresRepositories(db: Db): StoreRepositories {
         });
         return toOrderActivity(row);
       },
+      async listRecent(limit) {
+        const rows = await db.orderActivity.findMany({
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          take: limit,
+        });
+        return rows.map(toOrderActivity);
+      },
     },
 
     orderNotes: {
@@ -580,6 +599,10 @@ function buildPostgresRepositories(db: Db): StoreRepositories {
         const rows = await db.payment.findMany({
           where: { orderId: { in: orderIds } },
         });
+        return rows.map(toPayment);
+      },
+      async list() {
+        const rows = await db.payment.findMany();
         return rows.map(toPayment);
       },
       async create(payment) {
@@ -672,6 +695,13 @@ function buildPostgresRepositories(db: Db): StoreRepositories {
           },
         });
         return toPaymentActivity(row);
+      },
+      async listRecent(limit) {
+        const rows = await db.paymentActivity.findMany({
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          take: limit,
+        });
+        return rows.map(toPaymentActivity);
       },
     },
 
@@ -786,6 +816,13 @@ function buildPostgresRepositories(db: Db): StoreRepositories {
           },
         });
         return toShipmentActivity(row);
+      },
+      async listRecent(limit) {
+        const rows = await db.shipmentActivity.findMany({
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          take: limit,
+        });
+        return rows.map(toShipmentActivity);
       },
     },
 
@@ -976,6 +1013,13 @@ function buildPostgresRepositories(db: Db): StoreRepositories {
         });
         return toInventoryMovement(row);
       },
+      async listRecent(limit) {
+        const rows = await db.inventoryMovement.findMany({
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          take: limit,
+        });
+        return rows.map(toInventoryMovement);
+      },
     },
 
     appointments: {
@@ -1019,6 +1063,13 @@ function buildPostgresRepositories(db: Db): StoreRepositories {
             user.id,
           ),
         );
+      },
+      async queryCustomers(params) {
+        // Same trade-off as orders.query: load rows and run the SHARED
+        // predicate (catalog-logic.queryCustomers) so search/sort semantics
+        // are byte-identical across providers.
+        const rows = await db.user.findMany({ where: { kind: "customer" } });
+        return queryCustomers(rows.map(toUser), params);
       },
     },
 
@@ -1396,6 +1447,13 @@ function buildPostgresRepositories(db: Db): StoreRepositories {
           },
         });
         return toCustomizationActivity(row);
+      },
+      async listRecent(limit) {
+        const rows = await db.customizationActivity.findMany({
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          take: limit,
+        });
+        return rows.map(toCustomizationActivity);
       },
     },
 

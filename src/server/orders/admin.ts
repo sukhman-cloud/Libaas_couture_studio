@@ -25,8 +25,10 @@ import {
 import {
   getAdminPaymentForOrder,
   recordManualPayment,
+  transitionPaymentStatus,
   type AdminPaymentView,
 } from "@/server/payments/service";
+import { isAllowedPaymentTransition } from "@/server/payments/workflow";
 import {
   computeFulfillmentReadiness,
   createShipment,
@@ -474,6 +476,38 @@ export async function recordAdminManualPayment(
 
   const result = await recordManualPayment({
     orderId: order.id,
+    actorUserId: auth.session.sub,
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/**
+ * Admin-controlled payment transition for anything beyond the manual-paid
+ * shortcut above (mark failed, cancel, refund). Validated against the same
+ * payment state machine `recordAdminManualPayment` and the customer-facing
+ * payment flow both use — there is no separate, looser admin path.
+ */
+export async function transitionAdminPayment(
+  orderNumber: string,
+  nextStatus: string,
+): Promise<AdminOrderMutationResult> {
+  const auth = await authorizeAdmin("payments.write");
+  if (!auth.ok) return { ok: false, error: auth.error };
+  if (!isOrderNumber(orderNumber)) return { ok: false, error: "Order not found." };
+
+  const order = await getRepositories().orders.getByOrderNumber(orderNumber);
+  if (!order) return { ok: false, error: "Order not found." };
+
+  const payment = await getRepositories().payments.getByOrderId(order.id);
+  if (!payment) return { ok: false, error: "No payment exists for this order." };
+  if (!isAllowedPaymentTransition(payment.status, nextStatus as PaymentStatus)) {
+    return { ok: false, error: "That payment status transition is not allowed." };
+  }
+
+  const result = await transitionPaymentStatus({
+    orderId: order.id,
+    nextStatus: nextStatus as PaymentStatus,
     actorUserId: auth.session.sub,
   });
   if (!result.ok) return { ok: false, error: result.error };

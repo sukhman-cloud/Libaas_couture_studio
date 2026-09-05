@@ -15,8 +15,12 @@ import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { Caption, Heading } from "@/components/ui/typography";
 import {
+  changeStaffRole,
   createStaffAccount,
+  deactivateStaffAccount,
+  reactivateStaffAccount,
   type CreateStaffFormState,
+  type StaffMutationState,
 } from "@/lib/auth/actions";
 import type { AdminAccountListItem } from "@/server/staff/admin";
 import type { RoleName } from "@/types/domain";
@@ -150,7 +154,120 @@ function NewStaffForm() {
   );
 }
 
-export function StaffManager({ accounts }: { accounts: AdminAccountListItem[] }) {
+const initialMutationState: StaffMutationState = {};
+
+function useStaffMutationToast(state: StaffMutationState) {
+  const { toast } = useToast();
+  const last = useRef<StaffMutationState | null>(null);
+  useEffect(() => {
+    if (last.current === state) return;
+    last.current = state;
+    if (state.success) toast({ title: state.success, tone: "success" });
+    else if (state.error) toast({ title: state.error, tone: "danger" });
+  }, [state, toast]);
+}
+
+/** Role-change select for one staff row, or a static badge when the signed-
+ *  in admin isn't allowed to change it (self, or a non-owner viewing an
+ *  owner). Editability is re-checked server-side regardless. */
+function StaffRoleControl({
+  account,
+  canEditRole,
+}: {
+  account: AdminAccountListItem;
+  canEditRole: boolean;
+}) {
+  const [roleState, roleAction, rolePending] = useActionState<StaffMutationState, FormData>(
+    changeStaffRole,
+    initialMutationState,
+  );
+  useStaffMutationToast(roleState);
+
+  if (!canEditRole) {
+    return <Badge tone={ROLE_TONES[account.role]}>{ROLE_LABELS[account.role]}</Badge>;
+  }
+
+  return (
+    <form action={roleAction}>
+      <input type="hidden" name="userId" value={account.id} />
+      <Select
+        name="role"
+        defaultValue={account.role}
+        disabled={rolePending}
+        aria-label={`Change role for ${account.name}`}
+        className="h-11 min-w-28 text-sm"
+        onChange={(event) => event.currentTarget.form?.requestSubmit()}
+      >
+        <option value="staff">Staff</option>
+        <option value="tailor">Tailor</option>
+        <option value="manager">Manager</option>
+        <option value="owner">Owner</option>
+      </Select>
+    </form>
+  );
+}
+
+/** Deactivate/reactivate control for one staff row, with a confirmation
+ *  dialog gating the destructive (deactivate) direction only. */
+function StaffStatusControl({ account }: { account: AdminAccountListItem }) {
+  const [statusState, statusAction, statusPending] = useActionState<StaffMutationState, FormData>(
+    account.isActive ? deactivateStaffAccount : reactivateStaffAccount,
+    initialMutationState,
+  );
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
+  const statusFormRef = useRef<HTMLFormElement>(null);
+
+  useStaffMutationToast(statusState);
+
+  return (
+    <>
+      <form
+        ref={statusFormRef}
+        action={statusAction}
+        onSubmit={(event) => {
+          if (account.isActive) {
+            event.preventDefault();
+            setConfirmDeactivate(true);
+          }
+        }}
+      >
+        <input type="hidden" name="userId" value={account.id} />
+        <Button
+          type="submit"
+          size="sm"
+          variant={account.isActive ? "outline" : "primary"}
+          isLoading={statusPending}
+        >
+          {account.isActive ? "Deactivate" : "Reactivate"}
+        </Button>
+      </form>
+
+      <ConfirmationDialog
+        open={confirmDeactivate}
+        onClose={() => setConfirmDeactivate(false)}
+        onConfirm={() => {
+          setConfirmDeactivate(false);
+          statusFormRef.current?.requestSubmit();
+        }}
+        title={`Deactivate ${account.name}?`}
+        description="They will be signed out immediately and won't be able to sign back in until reactivated."
+        confirmLabel="Deactivate"
+        destructive
+        isConfirming={statusPending}
+      />
+    </>
+  );
+}
+
+export function StaffManager({
+  accounts,
+  currentUserId,
+  currentUserRole,
+}: {
+  accounts: AdminAccountListItem[];
+  currentUserId: string;
+  currentUserRole: RoleName;
+}) {
   const [showForm, setShowForm] = useState(accounts.length === 0);
 
   return (
@@ -165,33 +282,48 @@ export function StaffManager({ accounts }: { accounts: AdminAccountListItem[] })
         <>
           {/* Mobile: stacked cards. sm+: table. */}
           <RowCardList>
-            {accounts.map((account) => (
-              <RowCard key={account.id}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <span className="block wrap-break-word font-medium text-navy-800">
-                      {account.name}
-                    </span>
-                    <Caption className="block wrap-break-word">
-                      {account.email ?? "No email"}
-                    </Caption>
+            {accounts.map((account) => {
+              const isSelf = account.id === currentUserId;
+              const canManage = !isSelf && (currentUserRole === "owner" || account.role !== "owner");
+              return (
+                <RowCard key={account.id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="block wrap-break-word font-medium text-navy-800">
+                        {account.name}
+                        {isSelf && <Caption className="ml-1 inline">(you)</Caption>}
+                      </span>
+                      <Caption className="block wrap-break-word">
+                        {account.email ?? "No email"}
+                      </Caption>
+                    </div>
+                    {!canManage && <Badge tone={ROLE_TONES[account.role]}>{ROLE_LABELS[account.role]}</Badge>}
                   </div>
-                  <Badge tone={ROLE_TONES[account.role]}>{ROLE_LABELS[account.role]}</Badge>
-                </div>
-                <div className="mt-3 space-y-1 border-t border-cream-200 pt-3">
-                  <RowCardField label="Status">
-                    {account.isActive ? (
-                      <Badge tone="success">Active</Badge>
-                    ) : (
-                      <Badge tone="danger">Deactivated</Badge>
+                  <div className="mt-3 space-y-2 border-t border-cream-200 pt-3">
+                    {canManage && (
+                      <RowCardField label="Role">
+                        <StaffRoleControl account={account} canEditRole={canManage} />
+                      </RowCardField>
                     )}
-                  </RowCardField>
-                  <RowCardField label="Added">
-                    {dateFormatter.format(new Date(account.createdAt))}
-                  </RowCardField>
-                </div>
-              </RowCard>
-            ))}
+                    <RowCardField label="Status">
+                      {account.isActive ? (
+                        <Badge tone="success">Active</Badge>
+                      ) : (
+                        <Badge tone="danger">Deactivated</Badge>
+                      )}
+                    </RowCardField>
+                    <RowCardField label="Added">
+                      {dateFormatter.format(new Date(account.createdAt))}
+                    </RowCardField>
+                    {canManage && (
+                      <div className="flex justify-end pt-1">
+                        <StaffStatusControl account={account} />
+                      </div>
+                    )}
+                  </div>
+                </RowCard>
+              );
+            })}
           </RowCardList>
 
           <Table wrapperClassName="hidden sm:block">
@@ -201,34 +333,43 @@ export function StaffManager({ accounts }: { accounts: AdminAccountListItem[] })
                 <TH>Role</TH>
                 <TH>Status</TH>
                 <TH>Added</TH>
+                <TH>Actions</TH>
               </TR>
             </THead>
             <TBody>
-              {accounts.map((account) => (
-                <TR key={account.id}>
-                  <TD className="min-w-0">
-                    <span className="block wrap-break-word font-medium text-navy-800">
-                      {account.name}
-                    </span>
-                    <Caption className="block wrap-break-word">
-                      {account.email ?? "No email"}
-                    </Caption>
-                  </TD>
-                  <TD>
-                    <Badge tone={ROLE_TONES[account.role]}>{ROLE_LABELS[account.role]}</Badge>
-                  </TD>
-                  <TD>
-                    {account.isActive ? (
-                      <Badge tone="success">Active</Badge>
-                    ) : (
-                      <Badge tone="danger">Deactivated</Badge>
-                    )}
-                  </TD>
-                  <TD className="whitespace-nowrap text-muted">
-                    {dateFormatter.format(new Date(account.createdAt))}
-                  </TD>
-                </TR>
-              ))}
+              {accounts.map((account) => {
+                const isSelf = account.id === currentUserId;
+                const canManage = !isSelf && (currentUserRole === "owner" || account.role !== "owner");
+                return (
+                  <TR key={account.id}>
+                    <TD className="min-w-0">
+                      <span className="block wrap-break-word font-medium text-navy-800">
+                        {account.name}
+                        {isSelf && <Caption className="ml-1 inline">(you)</Caption>}
+                      </span>
+                      <Caption className="block wrap-break-word">
+                        {account.email ?? "No email"}
+                      </Caption>
+                    </TD>
+                    <TD>
+                      <StaffRoleControl account={account} canEditRole={canManage} />
+                    </TD>
+                    <TD>
+                      {account.isActive ? (
+                        <Badge tone="success">Active</Badge>
+                      ) : (
+                        <Badge tone="danger">Deactivated</Badge>
+                      )}
+                    </TD>
+                    <TD className="whitespace-nowrap text-muted">
+                      {dateFormatter.format(new Date(account.createdAt))}
+                    </TD>
+                    <TD className="min-w-0">
+                      {canManage ? <StaffStatusControl account={account} /> : <Caption>—</Caption>}
+                    </TD>
+                  </TR>
+                );
+              })}
             </TBody>
           </Table>
         </>

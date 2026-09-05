@@ -1,8 +1,8 @@
 import "server-only";
 import { getRepositories } from "@/server/data";
 import type { StoreRepositories } from "@/server/data/repositories";
-import { customerLockKey, withLock } from "@/server/lock";
-import type { AuthCredential, ID, User } from "@/types/domain";
+import { adminLockKey, customerLockKey, withLock } from "@/server/lock";
+import type { AdminUser, AuthCredential, ID, User } from "@/types/domain";
 
 /**
  * The single entry point for security-sensitive account mutations —
@@ -133,4 +133,55 @@ export async function rotateSession(
     updatedAt: new Date().toISOString(),
   });
   return updated.sessionVersion;
+}
+
+/** Same shape as AccountMutationContext, plus the AdminUser row (needed for
+ *  role reassignment) re-read inside the same transaction. */
+export interface AdminMutationContext {
+  tx: StoreRepositories;
+  user: User;
+  credential: AuthCredential;
+  adminUser: AdminUser;
+}
+
+export type AdminMutationFailure = "not_found" | "inactive";
+
+export type AdminMutationResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; reason: AdminMutationFailure };
+
+/**
+ * mutateAccount's mirror for admin/staff accounts (kind === "admin"): same
+ * lock → transaction → re-read discipline, so a staff deactivation or role
+ * change can never race a concurrent write to the same rows. Kept as a
+ * separate function (not a `kind` parameter on mutateAccount) because the
+ * kind check is exactly the boundary that must never be forgotten — a typo'd
+ * conditional could let one account type mutate through the other's path.
+ */
+export async function mutateAdminAccount<T>(
+  userId: ID,
+  mutate: (ctx: AdminMutationContext) => Promise<T>,
+  options: AccountMutationOptions = {},
+): Promise<AdminMutationResult<T>> {
+  const requireActive = options.requireActive ?? true;
+
+  return withLock(adminLockKey(userId), () =>
+    getRepositories().transaction(
+      async (tx): Promise<AdminMutationResult<T>> => {
+        const user = await tx.users.getById(userId);
+        if (!user || user.kind !== "admin") {
+          return { ok: false, reason: "not_found" };
+        }
+        if (requireActive && !user.isActive) {
+          return { ok: false, reason: "inactive" };
+        }
+
+        const credential = await tx.credentials.getByUserId(userId);
+        const adminUser = await tx.adminUsers.getByUserId(userId);
+        if (!credential || !adminUser) return { ok: false, reason: "not_found" };
+
+        return { ok: true, value: await mutate({ tx, user, credential, adminUser }) };
+      },
+    ),
+  );
 }

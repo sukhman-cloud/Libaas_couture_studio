@@ -47,6 +47,7 @@ import {
   publishedInOrder,
   queryCategories,
   queryCollections,
+  queryCustomers,
   queryOrders,
   sortProducts,
 } from "@/server/data/catalog-logic";
@@ -609,6 +610,11 @@ function buildStoreRepositories(
       async create(activity) {
         return insert(store.orderActivities, activity);
       },
+      async listRecent(limit) {
+        return [...store.orderActivities]
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+          .slice(0, limit);
+      },
     },
 
     orderNotes: {
@@ -634,6 +640,9 @@ function buildStoreRepositories(
       async listByOrderIds(orderIds) {
         const wanted = new Set(orderIds);
         return store.payments.filter((payment) => wanted.has(payment.orderId));
+      },
+      async list() {
+        return [...store.payments];
       },
       async create(payment) {
         return guard(async () => {
@@ -709,6 +718,11 @@ function buildStoreRepositories(
       },
       async create(activity) {
         return insert(store.paymentActivities, activity);
+      },
+      async listRecent(limit) {
+        return [...store.paymentActivities]
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+          .slice(0, limit);
       },
     },
 
@@ -800,6 +814,11 @@ function buildStoreRepositories(
       },
       async create(activity) {
         return insert(store.shipmentActivities, activity);
+      },
+      async listRecent(limit) {
+        return [...store.shipmentActivities]
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+          .slice(0, limit);
       },
     },
 
@@ -969,6 +988,11 @@ function buildStoreRepositories(
           return movement;
         });
       },
+      async listRecent(limit) {
+        return [...store.inventoryMovements]
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+          .slice(0, limit);
+      },
     },
 
     appointments: {
@@ -997,6 +1021,10 @@ function buildStoreRepositories(
       },
       async update(user) {
         return replace(store.users, user, "User");
+      },
+      async queryCustomers(params) {
+        const customers = store.users.filter((u) => u.kind === "customer");
+        return queryCustomers(customers, params);
       },
     },
 
@@ -1161,6 +1189,11 @@ function buildStoreRepositories(
       },
       async create(activity) {
         return insert(store.customizationActivities, activity);
+      },
+      async listRecent(limit) {
+        return [...store.customizationActivities]
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+          .slice(0, limit);
       },
     },
 

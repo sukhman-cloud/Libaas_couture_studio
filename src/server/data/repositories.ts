@@ -216,6 +216,9 @@ export interface OrderQuery extends ListParams {
    *  catalog-logic.ts) — never against credentials. */
   search?: string;
   status?: Order["status"];
+  /** Inclusive ISO datetime bounds on createdAt, for analytics/reporting. */
+  createdAtFrom?: string;
+  createdAtTo?: string;
   /** Defaults to "newest"; every sort has a stable id tiebreak. */
   sort?: OrderSort;
 }
@@ -246,6 +249,8 @@ export interface OrderRepository {
 export interface OrderActivityRepository {
   listByOrderId(orderId: ID): Promise<OrderActivity[]>;
   create(activity: OrderActivity): Promise<OrderActivity>;
+  /** Most recent rows across ALL orders, for the audit log feed. */
+  listRecent(limit: number): Promise<OrderActivity[]>;
 }
 
 export interface OrderNoteRepository {
@@ -257,6 +262,11 @@ export interface PaymentRepository {
   getById(id: ID): Promise<Payment | null>;
   getByOrderId(orderId: ID): Promise<Payment | null>;
   listByOrderIds(orderIds: ID[]): Promise<Payment[]>;
+  /** Every payment in the store. There is no independent index on payments
+   *  beyond their owning order, so admin search/filter/sort/pagination is
+   *  composed in the service layer by joining against Order (same pattern
+   *  as listAdminCustomizations joining CustomizationRequest → User). */
+  list(): Promise<Payment[]>;
   create(payment: Payment): Promise<Payment>;
   update(payment: Payment): Promise<Payment>;
   transitionStatus(
@@ -277,6 +287,8 @@ export interface PaymentAttemptRepository {
 export interface PaymentActivityRepository {
   listByPaymentId(paymentId: ID): Promise<PaymentActivity[]>;
   create(activity: PaymentActivity): Promise<PaymentActivity>;
+  /** Most recent rows across ALL payments, for the audit log feed. */
+  listRecent(limit: number): Promise<PaymentActivity[]>;
 }
 
 export interface PaymentWebhookEventRepository {
@@ -302,6 +314,8 @@ export interface ShipmentRepository {
 export interface ShipmentActivityRepository {
   listByShipmentId(shipmentId: ID): Promise<ShipmentActivity[]>;
   create(activity: ShipmentActivity): Promise<ShipmentActivity>;
+  /** Most recent rows across ALL shipments, for the audit log feed. */
+  listRecent(limit: number): Promise<ShipmentActivity[]>;
 }
 
 export interface ShipmentWebhookEventRepository {
@@ -375,6 +389,8 @@ export interface InventoryMovementRepository {
    *  one row, mirroring PaymentAttemptRepository.getByIdempotencyKey. */
   getByIdempotencyKey(inventoryItemId: ID, idempotencyKey: ID): Promise<InventoryMovement | null>;
   create(movement: InventoryMovement): Promise<InventoryMovement>;
+  /** Most recent rows across ALL inventory items, for the audit log feed. */
+  listRecent(limit: number): Promise<InventoryMovement[]>;
 }
 
 export interface AppointmentRepository {
@@ -384,12 +400,25 @@ export interface AppointmentRepository {
 
 /* ── Identity & customer data (Phase 3) ─────────────────────────── */
 
+export type CustomerSort = "newest" | "oldest" | "name_asc" | "name_desc";
+
+export interface CustomerQuery extends ListParams {
+  /** Matched against name, email and phone. */
+  search?: string;
+  /** Defaults to "newest"; every sort has a stable id tiebreak. */
+  sort?: CustomerSort;
+}
+
 export interface UserRepository {
   getById(id: ID): Promise<User | null>;
   /** Lookup by normalized (lowercased, trimmed) email. */
   findByEmail(email: string): Promise<User | null>;
   create(user: User): Promise<User>;
   update(user: User): Promise<User>;
+  /** Admin search/filter/sort/pagination over customer accounts only
+   *  (kind === "customer"). Both providers run the SHARED predicates so
+   *  behavior is identical. */
+  queryCustomers(params: CustomerQuery): Promise<Paged<User>>;
 }
 
 export interface CredentialRepository {
@@ -491,6 +520,8 @@ export interface CustomizationRequestRepository {
 export interface CustomizationActivityRepository {
   listByRequestId(requestId: ID): Promise<CustomizationActivity[]>;
   create(activity: CustomizationActivity): Promise<CustomizationActivity>;
+  /** Most recent rows across ALL requests, for the audit log feed. */
+  listRecent(limit: number): Promise<CustomizationActivity[]>;
 }
 
 export interface CustomizationNoteRepository {

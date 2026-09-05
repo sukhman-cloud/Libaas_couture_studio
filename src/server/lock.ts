@@ -57,3 +57,13 @@ export function withLock<T>(key: string, task: () => Promise<T>): Promise<T> {
 export function customerLockKey(userId: string): string {
   return `customer:${userId}`;
 }
+
+/**
+ * The domain lock for everything an admin/staff account owns: the User row,
+ * AdminUser role assignment and credential. Mirrors customerLockKey's
+ * reasoning exactly, kept as a distinct namespace so a customer id and an
+ * admin id can never collide on the same lock key.
+ */
+export function adminLockKey(userId: string): string {
+  return `admin:${userId}`;
+}

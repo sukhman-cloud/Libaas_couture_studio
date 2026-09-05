@@ -63,15 +63,17 @@ export default async function AdminCustomizationsPage({
         <form
           method="get"
           action="/admin/customizations"
-          className="grid gap-3 rounded-2xl border border-cream-200 bg-surface p-4 sm:grid-cols-2"
+          className="flex flex-col gap-3 rounded-2xl border border-cream-200 bg-surface p-4 lg:flex-row lg:items-end"
         >
-          <SearchInput
-            name="q"
-            defaultValue={list.q}
-            placeholder="Search request, customer or email"
-            aria-label="Search customizations"
-          />
-          <FormField label="Status">
+          <div className="min-w-0 flex-1">
+            <SearchInput
+              name="q"
+              defaultValue={list.q}
+              placeholder="Search request, customer or email"
+              aria-label="Search customizations"
+            />
+          </div>
+          <FormField label="Status" className="lg:w-48 lg:shrink-0">
             <Select name="status" defaultValue={list.status}>
               <option value="">All statuses</option>
               {CUSTOMIZATION_STATUSES.map((status) => (
@@ -81,15 +83,15 @@ export default async function AdminCustomizationsPage({
               ))}
             </Select>
           </FormField>
-          <div className="flex items-end gap-2 sm:col-span-2">
-            <button type="submit" className={buttonStyles({ size: "sm" })}>
+          <div className="flex gap-2">
+            <button type="submit" className={buttonStyles({ className: "flex-1 lg:flex-none" })}>
               <Search className="size-4" aria-hidden />
               Apply filters
             </button>
             {hasFilters && (
               <Link
                 href="/admin/customizations"
-                className={buttonStyles({ variant: "ghost", size: "sm" })}
+                className={buttonStyles({ variant: "ghost" })}
               >
                 Clear
               </Link>
