@@ -16,7 +16,17 @@ import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import {
+  RowCard,
+  RowCardField,
+  RowCardList,
+  Table,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { Caption, Heading } from "@/components/ui/typography";
@@ -191,61 +201,113 @@ export function CategoriesManager({
   return (
     <div className="space-y-4">
       {categories.length > 0 && (
-        <Table>
-          <THead>
-            <TR>
-              <TH>Category</TH>
-              <TH>Parent</TH>
-              <TH>Sort</TH>
-              <TH>Status</TH>
-              <TH className="text-right">Actions</TH>
-            </TR>
-          </THead>
-          <TBody>
+        <>
+          {/* Mobile: stacked cards. sm+: table. Same data and actions. */}
+          <RowCardList>
             {categories.map((category) => (
-              <TR key={category.id}>
-                <TD>
-                  <span className="font-medium text-navy-800">
-                    {category.name}
-                  </span>
-                  <Caption className="block">/{category.slug}</Caption>
-                </TD>
-                <TD className="text-muted">
-                  {category.parentId ? (names.get(category.parentId) ?? "—") : "—"}
-                </TD>
-                <TD className="tabular-nums text-muted">{category.sortOrder}</TD>
-                <TD>
+              <RowCard key={category.id}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="block wrap-break-word font-medium text-navy-800">
+                      {category.name}
+                    </span>
+                    <Caption className="block wrap-break-word">
+                      /{category.slug}
+                    </Caption>
+                  </div>
                   <StatusBadge status={category.status} />
-                </TD>
-                <TD>
-                  <div className="flex items-center justify-end gap-1">
+                </div>
+                <div className="mt-3 space-y-1 border-t border-cream-200 pt-3">
+                  <RowCardField label="Parent">
+                    {category.parentId ? (names.get(category.parentId) ?? "—") : "—"}
+                  </RowCardField>
+                  <RowCardField label="Sort">{category.sortOrder}</RowCardField>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center justify-end gap-1 border-t border-cream-200 pt-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditing(category.id)}
+                    disabled={isPending}
+                  >
+                    <Pencil className="size-3.5" aria-hidden />
+                    Edit
+                  </Button>
+                  {category.status !== "archived" && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setEditing(category.id)}
+                      className="text-danger hover:bg-danger/10"
+                      onClick={() => setArchiveTarget(category)}
                       disabled={isPending}
                     >
-                      <Pencil className="size-3.5" aria-hidden />
-                      Edit
+                      <Archive className="size-3.5" aria-hidden />
+                      Archive
                     </Button>
-                    {category.status !== "archived" && (
+                  )}
+                </div>
+              </RowCard>
+            ))}
+          </RowCardList>
+
+          <Table wrapperClassName="hidden sm:block">
+            <THead>
+              <TR>
+                <TH>Category</TH>
+                <TH>Parent</TH>
+                <TH>Sort</TH>
+                <TH>Status</TH>
+                <TH className="text-right">Actions</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {categories.map((category) => (
+                <TR key={category.id}>
+                  <TD className="min-w-0">
+                    <span className="block wrap-break-word font-medium text-navy-800">
+                      {category.name}
+                    </span>
+                    <Caption className="block wrap-break-word">
+                      /{category.slug}
+                    </Caption>
+                  </TD>
+                  <TD className="text-muted">
+                    {category.parentId ? (names.get(category.parentId) ?? "—") : "—"}
+                  </TD>
+                  <TD className="tabular-nums text-muted">{category.sortOrder}</TD>
+                  <TD>
+                    <StatusBadge status={category.status} />
+                  </TD>
+                  <TD>
+                    <div className="flex items-center justify-end gap-1">
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-danger hover:bg-danger/10"
-                        onClick={() => setArchiveTarget(category)}
+                        onClick={() => setEditing(category.id)}
                         disabled={isPending}
                       >
-                        <Archive className="size-3.5" aria-hidden />
-                        Archive
+                        <Pencil className="size-3.5" aria-hidden />
+                        Edit
                       </Button>
-                    )}
-                  </div>
-                </TD>
-              </TR>
-            ))}
-          </TBody>
-        </Table>
+                      {category.status !== "archived" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-danger hover:bg-danger/10"
+                          onClick={() => setArchiveTarget(category)}
+                          disabled={isPending}
+                        >
+                          <Archive className="size-3.5" aria-hidden />
+                          Archive
+                        </Button>
+                      )}
+                    </div>
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </>
       )}
 
       {editing !== null ? (

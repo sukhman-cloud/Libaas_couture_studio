@@ -83,7 +83,11 @@ export function ProductForm({
   );
 
   return (
-    <form action={formAction} className="space-y-5" noValidate>
+    <form
+      action={formAction}
+      className="space-y-5 pb-20 sm:pb-0"
+      noValidate
+    >
       {state.error && <Alert tone="danger">{state.error}</Alert>}
       {product && <input type="hidden" name="productId" value={product.id} />}
 
@@ -395,13 +399,15 @@ export function ProductForm({
         </CardContent>
       </Card>
 
-      <div className="flex flex-wrap gap-3">
-        <Button type="submit" isLoading={isPending}>
+      {/* Mobile: sticky action bar so the primary action stays reachable
+          without scrolling back up a long form. sm+: inline, static. */}
+      <div className="fixed inset-x-0 bottom-0 z-30 flex gap-3 border-t border-cream-200 bg-cream-50/95 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur-md sm:static sm:z-auto sm:flex-wrap sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+        <Button type="submit" isLoading={isPending} className="flex-1 sm:flex-none">
           {product ? "Save changes" : "Create product"}
         </Button>
         <Link
           href="/admin/products"
-          className={buttonStyles({ variant: "ghost" })}
+          className={buttonStyles({ variant: "ghost", className: "flex-1 sm:flex-none" })}
         >
           Cancel
         </Link>

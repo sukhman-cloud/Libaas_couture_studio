@@ -141,7 +141,7 @@ export function ProductMediaManager({
                       }
                     }}
                   />
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-2">
                     {!item.isPrimary && (
                       <Button
                         variant="ghost"

@@ -10,7 +10,17 @@ import {
 import { Button, buttonStyles } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import {
+  RowCard,
+  RowCardField,
+  RowCardList,
+  Table,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+} from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { Caption } from "@/components/ui/typography";
 import {
@@ -118,7 +128,103 @@ export function ProductList({
         </div>
       )}
 
-      <Table>
+      {/* Mobile: stacked cards. sm+: table. Same data and actions, no scroll. */}
+      <RowCardList>
+        {products.map((product) => {
+          const archived = product.status === "archived";
+          return (
+            <RowCard key={product.id} className={cn(archived && "opacity-70")}>
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  label=""
+                  aria-label={`Select ${product.name}`}
+                  disabled={archived}
+                  checked={selected.has(product.id)}
+                  onChange={(event) =>
+                    setSelected((prev) => {
+                      const next = new Set(prev);
+                      if (event.target.checked) next.add(product.id);
+                      else next.delete(product.id);
+                      return next;
+                    })
+                  }
+                  className="mt-1 shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <Link
+                    href={`/admin/products/${product.id}/edit`}
+                    className="font-medium text-navy-800 underline-offset-4 hover:underline"
+                  >
+                    {product.name}
+                  </Link>
+                  <Caption className="block">{product.sku}</Caption>
+                </div>
+              </div>
+              <div className="mt-3 space-y-1 border-t border-cream-200 pt-3">
+                <RowCardField label="Price">
+                  {product.salePrice ? (
+                    <>
+                      <span className="font-medium">
+                        {formatPrice(product.salePrice.amount, product.salePrice.currency)}
+                      </span>
+                      <Caption className="ml-1.5 line-through">
+                        {formatPrice(product.price.amount, product.price.currency)}
+                      </Caption>
+                    </>
+                  ) : (
+                    formatPrice(product.price.amount, product.price.currency)
+                  )}
+                </RowCardField>
+                <RowCardField label="Status">
+                  <StatusBadge status={product.status} />
+                </RowCardField>
+                <RowCardField label="Availability">
+                  <AvailabilityBadge availability={product.availability} />
+                </RowCardField>
+                <RowCardField label="Category">
+                  {product.categoryName ?? "—"}
+                </RowCardField>
+                <RowCardField label="Updated">
+                  {formatDate(product.updatedAt)}
+                </RowCardField>
+              </div>
+              <div className="mt-3 flex items-center justify-end gap-1 border-t border-cream-200 pt-3">
+                <Link
+                  href={`/admin/products/${product.id}/edit`}
+                  className={buttonStyles({ variant: "ghost", size: "sm" })}
+                >
+                  <Pencil className="size-3.5" aria-hidden />
+                  Edit
+                </Link>
+                {archived ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={isPending}
+                    onClick={() => run(() => restoreProduct(product.id))}
+                  >
+                    <RotateCcw className="size-3.5" aria-hidden />
+                    Restore
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-danger hover:bg-danger/10"
+                    disabled={isPending}
+                    onClick={() => setConfirm({ kind: "one", product })}
+                  >
+                    <Archive className="size-3.5" aria-hidden />
+                    Archive
+                  </Button>
+                )}
+              </div>
+            </RowCard>
+          );
+        })}
+      </RowCardList>
+
+      <Table wrapperClassName="hidden sm:block">
         <THead>
           <TR>
             <TH className="w-10">

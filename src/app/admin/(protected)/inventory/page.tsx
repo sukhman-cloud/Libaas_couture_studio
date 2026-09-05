@@ -8,7 +8,17 @@ import { FormField } from "@/components/ui/form-field";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchInput } from "@/components/ui/search-input";
 import { Select } from "@/components/ui/select";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import {
+  RowCard,
+  RowCardField,
+  RowCardList,
+  Table,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+} from "@/components/ui/table";
 import { Caption } from "@/components/ui/typography";
 import { listAdminInventoryPage } from "@/server/inventory/admin";
 
@@ -138,7 +148,41 @@ export default async function AdminInventoryPage({
               {list.total} product{list.total === 1 ? "" : "s"} found
             </Caption>
 
-            <Table>
+            {/* Mobile: stacked cards. sm+: table. Same data, no scroll. */}
+            <RowCardList>
+              {list.items.map((item) => {
+                const badge = STATUS_BADGE[item.status];
+                return (
+                  <RowCard key={item.productId}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <Link
+                          href={`/admin/inventory/${item.productId}`}
+                          className="block wrap-break-word font-medium text-navy-800 underline-offset-4 hover:underline"
+                        >
+                          {item.productName}
+                        </Link>
+                        <Caption className="block">{item.sku}</Caption>
+                      </div>
+                      <Badge tone={badge.tone} className="shrink-0">
+                        {item.status === "low" && (
+                          <AlertTriangle className="mr-1 size-3" aria-hidden />
+                        )}
+                        {badge.label}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 space-y-1 border-t border-cream-200 pt-3">
+                      <RowCardField label="On hand">{item.quantityOnHand}</RowCardField>
+                      <RowCardField label="Reserved">{item.quantityReserved}</RowCardField>
+                      <RowCardField label="Available">{item.quantityAvailable}</RowCardField>
+                      <RowCardField label="Threshold">{item.lowStockThreshold}</RowCardField>
+                    </div>
+                  </RowCard>
+                );
+              })}
+            </RowCardList>
+
+            <Table wrapperClassName="hidden sm:block">
               <THead>
                 <TR>
                   <TH>Product</TH>

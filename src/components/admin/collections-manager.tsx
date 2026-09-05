@@ -12,7 +12,17 @@ import { Drawer } from "@/components/ui/drawer";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import {
+  RowCard,
+  RowCardField,
+  RowCardList,
+  Table,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { Caption, Heading, Text } from "@/components/ui/typography";
@@ -174,73 +184,135 @@ export function CollectionsManager({
   return (
     <div className="space-y-4">
       {collections.length > 0 && (
-        <Table>
-          <THead>
-            <TR>
-              <TH>Collection</TH>
-              <TH>Products</TH>
-              <TH>Sort</TH>
-              <TH>Status</TH>
-              <TH className="text-right">Actions</TH>
-            </TR>
-          </THead>
-          <TBody>
+        <>
+          {/* Mobile: stacked cards. sm+: table. Same data and actions. */}
+          <RowCardList>
             {collections.map((collection) => {
               const count = productCounts[collection.id] ?? 0;
               return (
-                <TR key={collection.id}>
-                  <TD>
-                    <span className="font-medium text-navy-800">
-                      {collection.name}
-                    </span>
-                    <Caption className="block">/{collection.slug}</Caption>
-                  </TD>
-                  <TD className="tabular-nums text-muted">{count}</TD>
-                  <TD className="tabular-nums text-muted">
-                    {collection.sortOrder}
-                  </TD>
-                  <TD>
+                <RowCard key={collection.id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="block wrap-break-word font-medium text-navy-800">
+                        {collection.name}
+                      </span>
+                      <Caption className="block wrap-break-word">
+                        /{collection.slug}
+                      </Caption>
+                    </div>
                     <StatusBadge status={collection.status} />
-                  </TD>
-                  <TD>
-                    <div className="flex items-center justify-end gap-1">
+                  </div>
+                  <div className="mt-3 space-y-1 border-t border-cream-200 pt-3">
+                    <RowCardField label="Products">{count}</RowCardField>
+                    <RowCardField label="Sort">{collection.sortOrder}</RowCardField>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-end gap-1 border-t border-cream-200 pt-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setAssignTarget(collection)}
+                      disabled={isPending || collection.status === "archived"}
+                    >
+                      <Settings2 className="size-3.5" aria-hidden />
+                      Products
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditing(collection.id)}
+                      disabled={isPending}
+                    >
+                      <Pencil className="size-3.5" aria-hidden />
+                      Edit
+                    </Button>
+                    {collection.status !== "archived" && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setAssignTarget(collection)}
-                        disabled={isPending || collection.status === "archived"}
-                      >
-                        <Settings2 className="size-3.5" aria-hidden />
-                        Products
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditing(collection.id)}
+                        className="text-danger hover:bg-danger/10"
+                        onClick={() => setArchiveTarget(collection)}
                         disabled={isPending}
                       >
-                        <Pencil className="size-3.5" aria-hidden />
-                        Edit
+                        <Archive className="size-3.5" aria-hidden />
+                        Archive
                       </Button>
-                      {collection.status !== "archived" && (
+                    )}
+                  </div>
+                </RowCard>
+              );
+            })}
+          </RowCardList>
+
+          <Table wrapperClassName="hidden sm:block">
+            <THead>
+              <TR>
+                <TH>Collection</TH>
+                <TH>Products</TH>
+                <TH>Sort</TH>
+                <TH>Status</TH>
+                <TH className="text-right">Actions</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {collections.map((collection) => {
+                const count = productCounts[collection.id] ?? 0;
+                return (
+                  <TR key={collection.id}>
+                    <TD className="min-w-0">
+                      <span className="block wrap-break-word font-medium text-navy-800">
+                        {collection.name}
+                      </span>
+                      <Caption className="block wrap-break-word">
+                        /{collection.slug}
+                      </Caption>
+                    </TD>
+                    <TD className="tabular-nums text-muted">{count}</TD>
+                    <TD className="tabular-nums text-muted">
+                      {collection.sortOrder}
+                    </TD>
+                    <TD>
+                      <StatusBadge status={collection.status} />
+                    </TD>
+                    <TD>
+                      <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-danger hover:bg-danger/10"
-                          onClick={() => setArchiveTarget(collection)}
+                          onClick={() => setAssignTarget(collection)}
+                          disabled={isPending || collection.status === "archived"}
+                        >
+                          <Settings2 className="size-3.5" aria-hidden />
+                          Products
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setEditing(collection.id)}
                           disabled={isPending}
                         >
-                          <Archive className="size-3.5" aria-hidden />
-                          Archive
+                          <Pencil className="size-3.5" aria-hidden />
+                          Edit
                         </Button>
-                      )}
-                    </div>
-                  </TD>
-                </TR>
-              );
-            })}
-          </TBody>
-        </Table>
+                        {collection.status !== "archived" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-danger hover:bg-danger/10"
+                            onClick={() => setArchiveTarget(collection)}
+                            disabled={isPending}
+                          >
+                            <Archive className="size-3.5" aria-hidden />
+                            Archive
+                          </Button>
+                        )}
+                      </div>
+                    </TD>
+                  </TR>
+                );
+              })}
+            </TBody>
+          </Table>
+        </>
       )}
 
       {editing !== null ? (

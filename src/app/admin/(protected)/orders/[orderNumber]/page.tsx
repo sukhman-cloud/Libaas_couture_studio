@@ -144,9 +144,9 @@ export default async function AdminOrderDetailPage({
                     </span>
                   </div>
                   {order.payment.providerPaymentId && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted">Provider reference</span>
-                      <span className="font-mono text-xs">
+                    <div className="flex items-start justify-between gap-3 text-sm">
+                      <span className="shrink-0 text-muted">Provider reference</span>
+                      <span className="min-w-0 wrap-break-word text-right font-mono text-xs">
                         {order.payment.providerPaymentId}
                       </span>
                     </div>
@@ -156,7 +156,7 @@ export default async function AdminOrderDetailPage({
                       <Caption className="mb-1 block">Attempts</Caption>
                       <ul className="space-y-1">
                         {order.payment.attempts.map((attempt, index) => (
-                          <li key={index} className="flex justify-between text-xs text-muted">
+                          <li key={index} className="flex flex-wrap justify-between gap-x-2 text-xs text-muted">
                             <span>
                               {attempt.provider.replace(/_/g, " ")} · {attempt.status}
                             </span>
@@ -193,21 +193,27 @@ export default async function AdminOrderDetailPage({
                     </span>
                   </div>
                   {order.shipment.carrier && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted">Carrier</span>
-                      <span>{order.shipment.carrier}</span>
+                    <div className="flex items-start justify-between gap-3 text-sm">
+                      <span className="shrink-0 text-muted">Carrier</span>
+                      <span className="min-w-0 wrap-break-word text-right">
+                        {order.shipment.carrier}
+                      </span>
                     </div>
                   )}
                   {order.shipment.trackingNumber && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted">Tracking number</span>
-                      <span className="font-mono text-xs">{order.shipment.trackingNumber}</span>
+                    <div className="flex items-start justify-between gap-3 text-sm">
+                      <span className="shrink-0 text-muted">Tracking number</span>
+                      <span className="min-w-0 wrap-break-word text-right font-mono text-xs">
+                        {order.shipment.trackingNumber}
+                      </span>
                     </div>
                   )}
                   {order.shipment.estimatedDelivery && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted">Estimated delivery</span>
-                      <span>{order.shipment.estimatedDelivery}</span>
+                    <div className="flex items-start justify-between gap-3 text-sm">
+                      <span className="shrink-0 text-muted">Estimated delivery</span>
+                      <span className="min-w-0 wrap-break-word text-right">
+                        {order.shipment.estimatedDelivery}
+                      </span>
                     </div>
                   )}
                   {order.shipment.activities.length > 0 && (
@@ -215,7 +221,7 @@ export default async function AdminOrderDetailPage({
                       <Caption className="mb-1 block">Timeline</Caption>
                       <ul className="space-y-1">
                         {order.shipment.activities.map((activity, index) => (
-                          <li key={index} className="flex justify-between text-xs text-muted">
+                          <li key={index} className="flex flex-wrap justify-between gap-x-2 text-xs text-muted">
                             <span>
                               {activity.toStatus
                                 ? SHIPMENT_STATUS_LABELS[activity.toStatus]

@@ -71,13 +71,13 @@ export function OrderItemConfiguration({
                   ? ` · Fit: ${FIT_LABEL[measurements.fitPreference] ?? measurements.fitPreference}`
                   : ""}
               </p>
-              <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3">
+              <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
                 {measurements.values.map((value) => (
-                  <div key={value.key} className="flex justify-between gap-3">
-                    <dt className="text-muted">
+                  <div key={value.key} className="flex items-baseline justify-between gap-3">
+                    <dt className="min-w-0 wrap-break-word text-muted">
                       {fieldLabel.get(value.key) ?? value.key}
                     </dt>
-                    <dd className="tabular-nums font-medium">
+                    <dd className="shrink-0 tabular-nums font-medium">
                       {value.value} {measurements.unit}
                     </dd>
                   </div>

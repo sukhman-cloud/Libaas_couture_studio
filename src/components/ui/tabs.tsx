@@ -109,7 +109,7 @@ export function Tab({
       tabIndex={selected ? 0 : -1}
       onClick={() => setValue(value)}
       className={cn(
-        "whitespace-nowrap rounded-full px-4 py-1.5 text-sm transition-colors",
+        "min-h-11 whitespace-nowrap rounded-full px-4 py-2.5 text-sm transition-colors",
         selected
           ? "bg-navy-700 text-cream-50 shadow-sm"
           : "text-navy-700 hover:bg-navy-50",

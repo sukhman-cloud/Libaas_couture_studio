@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { buttonStyles } from "@/components/ui/button";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { FormField } from "@/components/ui/form-field";
 import { InputControl } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -51,6 +52,8 @@ export function ShippingOperations({
     updateShipmentTrackingAction,
     initialOrderActionState,
   );
+  const formRefs = useRef<Partial<Record<ShipmentStatus, HTMLFormElement>>>({});
+  const [confirmTarget, setConfirmTarget] = useState<ShipmentStatus | null>(null);
 
   if (!hasShipment) {
     return (
@@ -93,13 +96,14 @@ export function ShippingOperations({
             {nextStatuses.map((nextStatus) => (
               <form
                 key={nextStatus}
+                ref={(el) => {
+                  if (el) formRefs.current[nextStatus] = el;
+                }}
                 action={statusAction}
                 onSubmit={(event) => {
-                  if (
-                    CONFIRM_STATUSES.has(nextStatus) &&
-                    !window.confirm(`Mark this shipment "${SHIPMENT_STATUS_LABELS[nextStatus]}"?`)
-                  ) {
+                  if (CONFIRM_STATUSES.has(nextStatus)) {
                     event.preventDefault();
+                    setConfirmTarget(nextStatus);
                   }
                 }}
               >
@@ -127,6 +131,25 @@ export function ShippingOperations({
           )}
           {!statusState.ok && <p className="mt-3 text-sm text-danger">{statusState.error}</p>}
         </div>
+
+        <ConfirmationDialog
+          open={confirmTarget !== null}
+          onClose={() => setConfirmTarget(null)}
+          onConfirm={() => {
+            const target = confirmTarget;
+            setConfirmTarget(null);
+            if (target) formRefs.current[target]?.requestSubmit();
+          }}
+          title={
+            confirmTarget
+              ? `Mark this shipment "${SHIPMENT_STATUS_LABELS[confirmTarget]}"?`
+              : ""
+          }
+          description="This is a terminal fulfillment state and cannot be undone from here."
+          confirmLabel="Confirm"
+          destructive
+          isConfirming={statusPending}
+        />
       </section>
 
       <section className="rounded-2xl border border-cream-200 bg-surface p-4 sm:p-5">

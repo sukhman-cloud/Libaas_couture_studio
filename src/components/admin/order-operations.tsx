@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { buttonStyles } from "@/components/ui/button";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import {
   addOrderNoteAction,
@@ -26,6 +27,8 @@ export function OrderOperations({
     addOrderNoteAction,
     initialOrderActionState,
   );
+  const formRefs = useRef<Partial<Record<OrderStatus, HTMLFormElement>>>({});
+  const [confirmTarget, setConfirmTarget] = useState<OrderStatus | null>(null);
 
   return (
     <div className="grid gap-5 lg:grid-cols-2">
@@ -36,10 +39,14 @@ export function OrderOperations({
             {nextStatuses.map((nextStatus) => (
               <form
                 key={nextStatus}
+                ref={(el) => {
+                  if (el) formRefs.current[nextStatus] = el;
+                }}
                 action={statusAction}
                 onSubmit={(event) => {
-                  if (nextStatus === "cancelled" && !window.confirm("Cancel this order?")) {
+                  if (nextStatus === "cancelled") {
                     event.preventDefault();
+                    setConfirmTarget(nextStatus);
                   }
                 }}
               >
@@ -65,6 +72,21 @@ export function OrderOperations({
           {statusState.message && <p className="mt-3 text-sm text-success">{statusState.message}</p>}
           {!statusState.ok && <p className="mt-3 text-sm text-danger">{statusState.error}</p>}
         </div>
+
+        <ConfirmationDialog
+          open={confirmTarget !== null}
+          onClose={() => setConfirmTarget(null)}
+          onConfirm={() => {
+            const target = confirmTarget;
+            setConfirmTarget(null);
+            if (target) formRefs.current[target]?.requestSubmit();
+          }}
+          title="Cancel this order?"
+          description="The customer will be notified. This cannot be undone from here."
+          confirmLabel="Cancel order"
+          destructive
+          isConfirming={statusPending}
+        />
       </section>
 
       <section className="rounded-2xl border border-cream-200 bg-surface p-4 sm:p-5">

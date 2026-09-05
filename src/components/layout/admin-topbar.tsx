@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown";
 import { adminNavItems } from "@/config/nav";
 import { logoutAdmin } from "@/lib/auth/actions";
+import { cn } from "@/lib/utils";
 
 function breadcrumbsFor(pathname: string): BreadcrumbItem[] {
   if (pathname === "/admin") return [{ title: "Dashboard" }];
@@ -36,8 +37,8 @@ export function AdminTopbar() {
 
   return (
     <header className="sticky top-14 z-30 border-b border-cream-200 bg-cream-50/85 backdrop-blur-md lg:top-0">
-      <div className="flex h-14 items-center justify-between gap-3 px-4 sm:px-6">
-        <Breadcrumb items={breadcrumbsFor(pathname)} />
+      <div className="flex min-h-14 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-2 sm:px-6">
+        <Breadcrumb items={breadcrumbsFor(pathname)} className="min-w-0" />
 
         <div className="flex items-center gap-1">
           {/* Notifications — disclosure panel, not a menu */}
@@ -57,7 +58,7 @@ export function AdminTopbar() {
           {/* Profile */}
           <Dropdown>
             <DropdownTrigger
-              className="inline-flex items-center justify-center rounded-full transition-opacity hover:opacity-85"
+              className={cn(triggerClasses, "hover:opacity-85")}
               aria-label="Admin account menu"
               aria-haspopup="menu"
             >

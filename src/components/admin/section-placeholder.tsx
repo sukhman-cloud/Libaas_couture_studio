@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 
 export interface AdminSectionPlaceholderProps {
@@ -6,6 +7,8 @@ export interface AdminSectionPlaceholderProps {
   title: string;
   description: string;
   phase: string;
+  /** Optional pointer to where related functionality already exists. */
+  action?: ReactNode;
 }
 
 /** Shared placeholder for admin sections that arrive in later phases. */
@@ -14,6 +17,7 @@ export function AdminSectionPlaceholder({
   title,
   description,
   phase,
+  action,
 }: AdminSectionPlaceholderProps) {
   return (
     <div>
@@ -25,6 +29,7 @@ export function AdminSectionPlaceholder({
           icon={icon}
           title={`${title} arrives in ${phase}`}
           description={description}
+          action={action}
         />
       </div>
     </div>

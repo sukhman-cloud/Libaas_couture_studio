@@ -60,7 +60,7 @@ export function Pagination({
 
   const itemClass = (active: boolean, disabled = false) =>
     cn(
-      "inline-flex size-9 items-center justify-center rounded-full text-sm transition-colors",
+      "inline-flex size-11 items-center justify-center rounded-full text-sm transition-colors",
       active
         ? "bg-navy-700 font-medium text-cream-50"
         : "text-navy-700 hover:bg-navy-50",
@@ -111,7 +111,7 @@ export function Pagination({
         {pageWindow(page, pageCount).map((p, index) => (
           <li key={`${p}-${index}`}>
             {p === "…" ? (
-              <span className="inline-flex size-9 items-center justify-center text-sm text-muted" aria-hidden>
+              <span className="inline-flex size-11 items-center justify-center text-sm text-muted" aria-hidden>
                 …
               </span>
             ) : (

@@ -11,7 +11,17 @@ import { FormField } from "@/components/ui/form-field";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchInput } from "@/components/ui/search-input";
 import { Select } from "@/components/ui/select";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import {
+  RowCard,
+  RowCardField,
+  RowCardList,
+  Table,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+} from "@/components/ui/table";
 import { Caption } from "@/components/ui/typography";
 import { formatPrice } from "@/lib/utils";
 import type { OrderSort } from "@/server/data/repositories";
@@ -162,7 +172,55 @@ export default async function AdminOrdersPage({
                 {list.total} order{list.total === 1 ? "" : "s"} found
               </Caption>
 
-              <Table>
+              {/* Mobile: stacked cards. sm+: table. Same data, no scroll. */}
+              <RowCardList>
+                {list.items.map((order) => (
+                  <RowCard key={order.orderNumber}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <Link
+                          href={`/admin/orders/${order.orderNumber}`}
+                          className="font-mono text-sm font-medium text-navy-800 underline-offset-4 hover:underline"
+                        >
+                          {order.orderNumber}
+                        </Link>
+                        <Caption className="block">
+                          {formatDate(order.placedAt)}
+                        </Caption>
+                      </div>
+                      <p className="shrink-0 tabular-nums font-medium text-navy-800">
+                        {formatPrice(order.total.amount, order.total.currency)}
+                      </p>
+                    </div>
+                    <div className="mt-3 space-y-1 border-t border-cream-200 pt-3">
+                      <RowCardField label="Customer">
+                        <span className="wrap-break-word">{order.customerName}</span>
+                      </RowCardField>
+                      <RowCardField label="Items">
+                        {order.totalQuantity}{" "}
+                        {order.totalQuantity === 1 ? "piece" : "pieces"}
+                        {order.hasStitchedItems && (
+                          <Badge tone="gold" className="ml-2">
+                            <Scissors className="mr-1 size-3" aria-hidden />
+                            Stitched
+                          </Badge>
+                        )}
+                      </RowCardField>
+                      <RowCardField label="Status">
+                        <OrderStatusBadge status={order.status} />
+                      </RowCardField>
+                      <RowCardField label="Fulfillment">
+                        <div className="flex flex-wrap justify-end gap-1.5">
+                          <PaymentStatusBadge status={order.paymentStatus} />
+                          <ShippingStatusBadge status={order.shipmentStatus} />
+                        </div>
+                      </RowCardField>
+                    </div>
+                  </RowCard>
+                ))}
+              </RowCardList>
+
+              <Table wrapperClassName="hidden sm:block">
                 <THead>
                   <TR>
                     <TH>Order</TH>

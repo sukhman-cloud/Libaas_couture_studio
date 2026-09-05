@@ -12,10 +12,17 @@ export interface CheckboxProps
 
 export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
   function Checkbox({ label, description, className, ...props }, ref) {
+    // An empty label (icon-only/table-cell usage, identified by aria-label
+    // instead) would otherwise leave only the 20px box itself tappable —
+    // padding the label expands the hit area without changing the visible
+    // checkbox (a small negative margin absorbs the padding so it doesn't
+    // visually crowd adjacent content in a tight flex row).
+    const iconOnly = label === "";
     return (
       <label
         className={cn(
           "flex cursor-pointer items-start gap-3 text-sm text-ink",
+          iconOnly && "-m-2 p-2",
           props.disabled && "cursor-not-allowed opacity-60",
           className,
         )}
@@ -32,14 +39,16 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
             className="pointer-events-none absolute inset-0 m-auto size-3.5 text-cream-50 opacity-0 transition-opacity peer-checked:opacity-100"
           />
         </span>
-        <span>
-          {label}
-          {description && (
-            <span className="mt-0.5 block text-xs text-muted">
-              {description}
-            </span>
-          )}
-        </span>
+        {!iconOnly && (
+          <span>
+            {label}
+            {description && (
+              <span className="mt-0.5 block text-xs text-muted">
+                {description}
+              </span>
+            )}
+          </span>
+        )}
       </label>
     );
   },
