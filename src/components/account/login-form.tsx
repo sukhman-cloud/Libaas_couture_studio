@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import {
   loginCustomer,
   type AuthFormState,
@@ -30,10 +31,9 @@ export function LoginForm({ from }: { from?: string }) {
         defaultValue={state.values?.email}
         error={state.fieldErrors?.email}
       />
-      <Input
+      <PasswordInput
         label="Password"
         name="password"
-        type="password"
         autoComplete="current-password"
         required
         error={state.fieldErrors?.password}
